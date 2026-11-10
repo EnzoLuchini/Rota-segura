@@ -7,6 +7,7 @@ export function useRealRoutes() {
   const [routes,setRoutes] = useState([]), [areas,setAreas] = useState([]), [selected,setSelected] = useState(0);
   const [riskAvailable,setRiskAvailable] = useState(false), [message,setMessage] = useState(''), [busy,setBusy] = useState(false);
   const [water,setWater] = useState(true);
+  const [risk,setRisk] = useState(true);
   const clear = () => {setRoutes([]);setAreas([]);setMessage('');};
   async function compare(onSuccess) {
     setBusy(true); clear();
@@ -17,7 +18,7 @@ export function useRealRoutes() {
       if(data.routes.length) onSuccess();
     } catch(error) {setMessage(error.message);} finally {setBusy(false);}
   }
-  return {origin,destination,setOrigin,setDestination,routes,areas,selected,setSelected,riskAvailable,message,busy,water,setWater,clear,compare};
+  return {origin,destination,setOrigin,setDestination,routes,areas,selected,setSelected,riskAvailable,message,busy,water,setWater,risk,setRisk,clear,compare};
 }
 
 function LocationInput({label,place,onChange}) {
