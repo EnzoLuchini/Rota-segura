@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createRoot } from "react-dom/client";
 import ExtraScreens from "./ExtraScreens";
 import MapContextBar from "./components/MapContextBar";
+import RealMapLegend from "./components/RealMapLegend";
+import {Waterways, FitRoutes} from "./components/RealLayers";
+import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
+import Logo from "./components/Logo";
 import CityMapPanel from "./components/CityMapPanel";
 import CityModeTabs from "./components/CityModeTabs";
 import { getCityEvents, illustrativeFloodArea, illustrativeStreams } from "./data/cityMap";
@@ -25,6 +28,7 @@ import { useStoredState } from "./state/useStoredState";
 import {
   MapContainer,
   TileLayer,
+  GeoJSON,
   Polyline,
   Polygon,
   CircleMarker,
@@ -54,6 +58,7 @@ import {
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
+import "./real.css";
 
 const safer = routes.safe.points;
 const faster = routes.fast.points;
@@ -71,18 +76,6 @@ const factorIcons = {
   rain: CloudRain,
   water: Waves,
 };
-function Logo() {
-  return (
-    <div className="brand">
-      <span className="brandmark">
-        <Droplets size={21} />
-      </span>
-      <span>
-        Rota <strong>Segura</strong>
-      </span>
-    </div>
-  );
-}
 function Recenter({ signal, view }) {
   const map = useMap();
   const wasCity = useRef(false);
@@ -100,6 +93,17 @@ function Recenter({ signal, view }) {
   }, [signal, map, view]);
   return null;
 }
+function RecenterReal({signal, routes}) {
+  const map=useMap();
+  useEffect(()=>{
+    if (!signal) return;
+    const points=routes.flatMap(route=>route.geometry.coordinates.map(([lon,lat])=>[lat,lon]));
+    map.invalidateSize({animate:false,pan:false});
+    if(points.length) map.fitBounds(points,{padding:[35,35],animate:false});
+    else map.setView([-23.56,-46.65],12,{animate:false});
+  },[signal,map]);
+  return null;
+}
 function LocateCityEvent({selection, markers}) {
   const map = useMap();
   useEffect(() => {
@@ -109,8 +113,8 @@ function LocateCityEvent({selection, markers}) {
   }, [selection, map, markers]);
   return null;
 }
-function App() {
-  const [view, setView] = useState("welcome"),
+export default function App({real = false}) {
+  const [view, setView] = useState(real ? "home" : (new URLSearchParams(window.location.search).get("view") || "welcome")),
     [selected, setSelected] = useState("safe"),
     [expanded, setExpanded] = useState(-1),
     [menu, setMenu] = useState(false),
@@ -122,6 +126,7 @@ function App() {
     [cityDataState, setCityDataState] = useState("available"),
     [showAlert, setShowAlert] = useState(true),
     [citySelection, setCitySelection] = useState(null);
+  const realData = useRealRoutes();
   const menuTriggerRef = useRef(null);
   const cityMarkers = useRef({});
   const mapSurfaceRef = useRef(null);
@@ -148,7 +153,9 @@ function App() {
     [selectedSegment, setSelectedSegment] = useState(0),
     [centerSignal, setCenterSignal] = useState(0);
   const go = (next) => {
+    if (real && !["home", "compare"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
     setView(next);
+    if (next !== 'city') setCitySelection(null);
     document.querySelector(".panel")?.scrollTo(0, 0);
     if (next === "city") window.scrollTo(0, 0);
   };
@@ -185,8 +192,10 @@ function App() {
       <a className="skip-link" href="#main-content">
         Pular para o conteúdo
       </a>
+      {!real && <div className="simulation-banner">Simulação com dados fictícios · <a href="/">Ir para consulta real</a></div>}
       <header className="header">
         <Logo />
+        {real && <a className="real-simulation-link" href="/simulacao">Abrir simulação</a>}
         <nav aria-label="Navegação principal">
           <button
             className={"navlink " + (activeSection === "map" ? "active" : "")}
@@ -202,8 +211,7 @@ function App() {
             aria-current={activeSection === "alerts" ? "page" : undefined}
             onClick={() => go("alerts")}
           >
-            Alertas{" "}
-            <span className="count">{scenarioAlertVisible ? 1 : 0}</span>
+            Alertas {real ? <small>(simulação)</small> : <span className="count">{scenarioAlertVisible ? 1 : 0}</span>}
           </button>
           <button
             className={"navlink " + (activeSection === "saved" ? "active" : "")}
@@ -246,27 +254,28 @@ function App() {
         open={menu}
         onClose={() => setMenu(false)}
         onNavigate={go}
-        alertCount={scenarioAlertVisible ? 1 : 0}
+        alertCount={real ? 0 : (scenarioAlertVisible ? 1 : 0)}
         triggerRef={menuTriggerRef}
       />
       <main className="workspace">
-        <section className="map-area" aria-label={view === "city" ? "Mapa demonstrativo da cidade" : "Mapa demonstrativo de rotas"}>
+        <section className="map-area" aria-label={real ? "Mapa de rotas e informações geográficas" : view === "city" ? "Mapa demonstrativo da cidade" : "Mapa demonstrativo de rotas"}>
           {view === "city" && <div className="city-tabs-mobile"><CityModeTabs mode={cityMode} onModeChange={setCityMode} /></div>}
           <div className="map-surface" ref={mapSurfaceRef}>
             <MapContainer
-              center={[-23.568, -46.683]}
-              zoom={14}
+              center={real ? [-23.56, -46.65] : [-23.568, -46.683]}
+              zoom={real ? 12 : 14}
               zoomControl={false}
               scrollWheelZoom={true}
             >
-              <Recenter signal={centerSignal} view={view} />
+              {real ? <RecenterReal signal={centerSignal} routes={realData.routes}/> : <Recenter signal={centerSignal} view={view} />}
               <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
               <TileLayer
                 attribution="Tiles &copy; Esri &mdash; Sources: Esri, OpenStreetMap contributors"
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
               />
               <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}" />
-              {view !== "city" && <>
+              {real && <><Waterways enabled={realData.water}/>{realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {!real && view !== "city" && <>
               <Polygon
                 positions={zone}
                 pathOptions={{
@@ -326,14 +335,14 @@ function App() {
                 <Popup>Destino demonstrativo</Popup>
               </CircleMarker>
               </>}
-              {(view === "city" ? (cityDataState === "available" || cityDataState === "stale") : (dataState === "available" || dataState === "stale")) && <>
+              {!real && (view === "city" ? (cityDataState === "available" || cityDataState === "stale") : (dataState === "available" || dataState === "stale")) && <>
                 {illustrativeStreams.map((points, i) => <Polyline key={i} positions={points} pathOptions={{color: '#2586ac', weight: 3, opacity: .85, dashArray: '3 5'}}><Popup>Córrego ilustrativo · geometria fictícia. Sua presença não indica risco por si só.</Popup></Polyline>)}
                 {currentEvents.filter(event => event.kind === 'inundation').map(event => <Polygon key={'area-' + event.id} positions={illustrativeFloodArea(event.position, view !== 'city' || cityMode === 'now' ? 2.2 : 1)} pathOptions={{color: '#dc8b1b', weight: 2, dashArray: view === 'city' && cityMode === 'history' ? '6 5' : undefined, fillColor: '#ffc15b', fillOpacity: .26}}><Popup>Área de inundação ilustrativa · limites fictícios{view === 'city' && cityMode === 'history' ? ' · registro histórico' : ''}</Popup></Polygon>)}
                 {currentEvents.map(event => <Marker ref={marker => { if (marker) cityMarkers.current[event.id] = marker; else delete cityMarkers.current[event.id]; }} key={event.id} position={event.position} icon={cityMarkerIcons[event.kind] || cityMarkerIcons.flood} title={event.title}>
                   <Popup><strong>{event.title}</strong><br />{event.detail}<br />{event.source}</Popup>
                 </Marker>)}
               </>}
-              {view === "alert" && (
+              {!real && view === "alert" && (
                 <Polyline
                   positions={faster.slice(2, 5)}
                   pathOptions={{
@@ -343,7 +352,7 @@ function App() {
                   }}
                 />
               )}
-              {view === "segments" && (
+              {!real && view === "segments" && (
                 <Polyline
                   positions={
                     segmentId === 'origem-e-acesso'
@@ -360,7 +369,7 @@ function App() {
                 />
               )}
             </MapContainer>
-            {view !== "city" && <div className="map-top">
+            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Dados de chuva indisponíveis</span></div></div> : view !== "city" && <div className="map-top">
               <div className="weather">
                 <CloudRain size={19} />
                 <span>
@@ -384,7 +393,7 @@ function App() {
               </button>
             </div>
           </div>
-          <MapContextBar cityMode={view === "city" ? cityMode : null} />
+          {real ? <RealMapLegend showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.riskAvailable && realData.areas.length>0}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
           <div className="panel-inner">
@@ -426,7 +435,8 @@ function App() {
                   Compare rotas e conheça os riscos relacionados à chuva no seu
                   trajeto.
                 </p>
-                <button className="secondary city-entry" onClick={() => go("city")}><MapPin size={18} /> Explorar situação da cidade</button>
+                <button className="secondary city-entry" onClick={() => go("city")}><MapPin size={18} /> Explorar situação da cidade {real && "(simulação)"}</button>
+                {real ? <RealSearch data={realData} onCompare={()=>go("compare")}/> : <>
                 <div className="search-box">
                   <div className="input-row">
                     <span className="point start" />
@@ -521,11 +531,12 @@ function App() {
                   }
                 >
                   <Search size={18} /> Comparar rotas
-                </button>
+                </button></>}
+                {real && <div className="real-layer-controls"><label><input type="checkbox" checked={realData.water} onChange={e=>realData.setWater(e.target.checked)}/> Mostrar rios e córregos</label><p id="water-status" role="status"/></div>}
                 <div className="section-heading">
                   <div>
                     <span className="overline">No seu caminho</span>
-                    <h2>Fique por dentro</h2>
+                    <h2>Fique por dentro {real && <small>· simulação</small>}</h2>
                   </div>
                   <button className="text-button" onClick={() => go("alerts")}>
                     {scenarioAlertVisible ? "Ver alerta" : "Ver central"}{" "}
@@ -538,14 +549,14 @@ function App() {
                       <ShieldAlert size={21} />
                     </span>
                     <span>
-                      <strong>Alagamento na rota de volta</strong>
+                      <strong>Alagamento na rota de volta {real && "(simulação)"}</strong>
                       <small>Pinheiros · há 6 min</small>
                     </span>
                     <ChevronRight size={19} />
                   </button>
                 ) : (
                   <div className="empty-state">
-                    Alertas simulados estão desativados nas preferências.
+                    {showAlert ? 'Nenhum alerta de exemplo corresponde às preferências.' : 'Alerta de exemplo oculto na central de alertas.'}
                   </div>
                 )}
                 <div className="quick-actions">
@@ -560,13 +571,13 @@ function App() {
                 <div className="notice">
                   <Info size={17} />
                   <span>
-                    Este é um protótipo. Rotas, condições e ocorrências são
-                    ilustrativas.
+                    {real ? "Alertas, relatos e rotas frequentes são simulados. As rotas e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
                   </span>
                 </div>
               </>
             )}
-            {view === "compare" && (
+            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")}/>}
+            {view === "compare" && !real && (
               <>
                 <button className="back" onClick={() => go("home")}>
                   <ArrowLeft size={18} /> Voltar ao início
@@ -745,7 +756,7 @@ function App() {
                 </p>
               </>
             )}
-            {view === "alert" && (
+            {!real && view === "alert" && (
               <>
                 <button className="back" onClick={() => go("alerts")}>
                   <ArrowLeft size={18} /> Voltar aos alertas
@@ -823,4 +834,3 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);

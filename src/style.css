@@ -60,3 +60,5 @@
   .city-tabs-mobile .city-tabs { margin: 0; }
   .city-tabs-desktop { display: none; }
 }
+ .simulation-banner { background: #edf5ff; color: #173d73; padding: 8px 16px; text-align: center; font-size: 13px; }
+ .simulation-banner a { color: #1459bc; font-weight: 700; }
