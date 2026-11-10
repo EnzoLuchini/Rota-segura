@@ -214,3 +214,39 @@ Expected: exit 0 em todos os comandos.
 git add docs/superpowers/plans/2026-11-10-refinamento-ui-acessibilidade.md
 git commit -m "docs: registrar verificação de ui"
 ```
+
+## Evidência de verificação — 2026-11-10
+
+### Matriz responsiva
+
+| Viewport | Mapa | Barra recolhida | Barra expandida | Overflow horizontal | Atribuição |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 320×700 | 266 px | 90 px | 207 px | 0 px | visível |
+| 360×800 | 304 px | 90 px | 207 px | 0 px | visível |
+| 390×844 | 321 px | 91 px | 208 px | 0 px | visível |
+| 768×900 | 330 px | 91 px | 208 px | 0 px | visível |
+| 1024×768 | 696 px | 64 px | 131 px | 0 px | visível |
+| 1440×900 | 828 px | 64 px | 131 px | 0 px | visível |
+
+- Em 320 px, os quatro pontos expandidos permanecem no fluxo e não cobrem a cartografia.
+- Estados disponível, desatualizado, carregando e indisponível foram exercitados em 390 px; mensagens, bloqueio do botão e rótulo de chuva corresponderam ao estado, sem overflow horizontal.
+- Em 1024 px o painel mediu 430 px e o mapa continuou utilizável; em 1440 px o painel permaneceu dentro do limite de 500 px.
+
+### Acessibilidade
+
+- Menu: foco inicial em “Mapa”, fechamento por `Escape`, retorno ao gatilho e foco no título mesmo ao navegar para a tela atual.
+- Link de salto: ativação por teclado focou `#main-content`.
+- Barra do mapa e seleção de rota foram ativadas por teclado; foco visível medido com contorno sólido de 3 px.
+- Controles críticos medidos em 44 px; campos editáveis no mobile medidos em 16 px.
+- Contrastes medidos: texto secundário 5,47:1; eyebrow 4,64:1; botão primário 5,25:1.
+- Regra `prefers-reduced-motion` confirmada na folha de estilos.
+
+### Fluxos e persistência
+
+- Abertura → mapa → comparação → explicação → trechos: aprovado.
+- Salvar → editar → pausar rota → recarregar → conferir persistência: aprovado.
+- Alertas → detalhe do alerta: aprovado.
+- Criar relato → revisar → confirmar → listar: aprovado.
+- Preferências: chuva desativada e severidade alta persistiram após recarregar.
+- Exclusão de rota: o controle e sua confirmação foram revisados, mas a confirmação destrutiva não foi acionada para preservar os dados locais do navegador.
+- Console do navegador: nenhum erro registrado durante os fluxos.
