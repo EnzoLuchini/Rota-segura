@@ -11,15 +11,14 @@ O usuário aprovou a direção **Barra contextual** no mockup visual de 10/11/20
 ### Mobile
 
 - Apenas o indicador de chuva e o botão de centralização permanecem como controles sobre o mapa; a atribuição obrigatória e os próprios elementos cartográficos continuam visíveis.
-- Legenda e acesso aos pontos do mapa ficam em uma barra contextual imediatamente abaixo da cartografia.
-- Abrir “Pontos do mapa” expande conteúdo no fluxo da página, sem cobrir ruas, rotas, ocorrência ou atribuição.
+- A legenda fica em uma barra contextual imediatamente abaixo da cartografia, sem controles adicionais.
 - O mapa mantém altura útil entre 260 e 330 px conforme a viewport.
 - O painel de conteúdo começa depois da barra contextual, sem sobreposição negativa.
 
 ### Desktop
 
 - O painel lateral continua à esquerda e o mapa ocupa o restante da viewport.
-- A legenda e “Pontos do mapa” formam um dock discreto na base do mapa.
+- A legenda forma um dock discreto na base do mapa.
 - O painel lateral ganha proporção e ritmo mais equilibrados, sem alterar a jornada funcional.
 
 ## Sistema visual
@@ -42,8 +41,8 @@ O usuário aprovou a direção **Barra contextual** no mockup visual de 10/11/20
 - A navegação oferece link para pular ao conteúdo principal, cujo destino recebe foco antes dos controles Leaflet.
 - O menu móvel fecha com `Escape`, move o foco para sua primeira ação ao abrir e devolve o foco ao botão ao fechar.
 - A mudança de tela continua movendo o foco sem exibir contorno visual permanente no título programaticamente focado.
-- O mapa mantém alternativas equivalentes por teclado para legenda e pontos importantes.
-- Estados expandidos usam `aria-expanded` e regiões rotuladas; mensagens dinâmicas continuam anunciadas.
+- A legenda textual comunica as categorias sem depender apenas das cores do mapa.
+- Mensagens dinâmicas continuam anunciadas por regiões de status.
 - `prefers-reduced-motion` continua respeitado.
 
 ## Responsividade

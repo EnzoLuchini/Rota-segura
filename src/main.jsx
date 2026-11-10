@@ -348,11 +348,7 @@ function App() {
               </button>
             </div>
           </div>
-          <MapContextBar
-            origin={origin}
-            destination={destination}
-            onAnnounce={notify}
-          />
+          <MapContextBar />
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
           <div className="panel-inner">

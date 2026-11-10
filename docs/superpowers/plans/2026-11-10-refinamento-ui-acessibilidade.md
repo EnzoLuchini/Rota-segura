@@ -4,7 +4,7 @@
 
 **Goal:** aplicar a direção visual aprovada, removendo sobreposições do mapa no mobile e refinando acessibilidade e hierarquia em mobile e desktop.
 
-**Architecture:** extrair a legenda e os pontos acessíveis do mapa para um componente `MapContextBar`, posicionado no fluxo no mobile e como dock no desktop. Manter os dados e a navegação atuais, adicionando apenas comportamento de apresentação, foco e menu. Usar Vitest + Testing Library para cobrir a interação nova sem depender da cartografia externa.
+**Architecture:** extrair a legenda do mapa para um componente `MapContextBar`, posicionado no fluxo no mobile e como dock no desktop. Manter os dados e a navegação atuais, adicionando apenas comportamento de apresentação, foco e menu. Usar Vitest + Testing Library para cobrir a interface sem depender da cartografia externa.
 
 **Tech Stack:** React 19, Vite 6, Leaflet/react-leaflet, CSS responsivo, Vitest, jsdom e Testing Library.
 
@@ -23,7 +23,7 @@
 ## Review Focus
 
 - Viewport de 320 px: barra, legenda e conteúdo devem caber sem rolagem horizontal.
-- Detalhes expandidos: não podem cobrir a cartografia no mobile nem escapar da viewport.
+- Legenda: deve permanecer legível sem cobrir a cartografia no mobile nem escapar da viewport.
 - Menu móvel: `Escape`, foco inicial e retorno do foco precisam funcionar em sequência.
 - Desktop de 1024 px: painel lateral e mapa precisam permanecer utilizáveis sem esmagamento.
 - Atribuição e textos secundários: devem permanecer visíveis e legíveis em todos os breakpoints.
@@ -72,12 +72,11 @@ git commit -m "test: preparar testes de interface"
 - Modify: `src/style.css`
 
 **Interfaces:**
-- Produces: `MapContextBar({ origin, destination, onAnnounce })`, com botão `Pontos do mapa`, `aria-expanded` e região rotulada.
-- Consumes: origem/destino atuais e callback de anúncio já usado pelos toasts.
+- Produces: `MapContextBar()`, com legenda textual das rotas e da área de risco.
 
 - [ ] **Step 1: escrever testes RED**
 
-Cobrir: legenda textual sempre presente; região de pontos inicialmente recolhida; clique expande `Área R3`, `Ocorrência`, `Origem` e `Destino`; segundo clique recolhe; origem/destino chegam ao callback.
+Cobrir: legenda textual sempre presente e ausência do dropdown removido de pontos do mapa.
 
 - [ ] **Step 2: executar e observar falha**
 
@@ -91,7 +90,7 @@ Extrair legenda e controles de `main.jsx`. Envolver o Leaflet e seus overlays em
 
 - [ ] **Step 4: aplicar layout aprovado**
 
-No mobile, `.map-context` fica no fluxo e `.map-surface` usa `height: clamp(260px, 38svh, 330px)`. No desktop, `.map-context` vira dock na base da superfície. Remover `.legend` e `.map-details` antigos.
+No mobile, `.map-context` fica no fluxo e `.map-surface` usa `height: clamp(260px, 38svh, 330px)`. No desktop, `.map-context` vira dock na base da superfície. Remover controles e estilos antigos de detalhes do mapa.
 
 - [ ] **Step 5: verificar GREEN**
 
@@ -192,7 +191,7 @@ git commit -m "style: refinar hierarquia responsiva"
 
 - [ ] **Step 1: verificar matriz responsiva**
 
-No navegador, inspecionar 320×700, 360×800, 390×844, 768×900, 1024×768 e 1440×900; registrar rolagem horizontal, medidas do mapa/barra recolhida e expandida, visibilidade da atribuição e conteúdo longo. Cobrir chuva disponível, desatualizada, carregando e indisponível.
+No navegador, inspecionar 320×700, 360×800, 390×844, 768×900, 1024×768 e 1440×900; registrar rolagem horizontal, medidas do mapa e da barra de legenda, visibilidade da atribuição e conteúdo longo. Cobrir chuva disponível, desatualizada, carregando e indisponível.
 
 - [ ] **Step 2: verificar teclado**
 
@@ -219,16 +218,16 @@ git commit -m "docs: registrar verificação de ui"
 
 ### Matriz responsiva
 
-| Viewport | Mapa | Barra recolhida | Barra expandida | Overflow horizontal | Atribuição |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 320×700 | 266 px | 90 px | 207 px | 0 px | visível |
-| 360×800 | 304 px | 90 px | 207 px | 0 px | visível |
-| 390×844 | 321 px | 91 px | 208 px | 0 px | visível |
-| 768×900 | 330 px | 91 px | 208 px | 0 px | visível |
-| 1024×768 | 696 px | 64 px | 131 px | 0 px | visível |
-| 1440×900 | 828 px | 64 px | 131 px | 0 px | visível |
+| Viewport | Mapa | Barra original | Overflow horizontal | Atribuição |
+| --- | ---: | ---: | ---: | --- |
+| 320×700 | 266 px | 90 px | 0 px | visível |
+| 360×800 | 304 px | 90 px | 0 px | visível |
+| 390×844 | 321 px | 91 px | 0 px | visível |
+| 768×900 | 330 px | 91 px | 0 px | visível |
+| 1024×768 | 696 px | 64 px | 0 px | visível |
+| 1440×900 | 828 px | 64 px | 0 px | visível |
 
-- Em 320 px, os quatro pontos expandidos permanecem no fluxo e não cobrem a cartografia.
+- O dropdown de pontos do mapa foi removido posteriormente por decisão do produto; a barra final contém somente a legenda.
 - Estados disponível, desatualizado, carregando e indisponível foram exercitados em 390 px; mensagens, bloqueio do botão e rótulo de chuva corresponderam ao estado, sem overflow horizontal.
 - Em 1024 px o painel mediu 430 px e o mapa continuou utilizável; em 1440 px o painel permaneceu dentro do limite de 500 px.
 - Revisão adicional do intervalo desktop/tablet: 801, 820, 850, 900 e 1000 px apresentaram 0 px² de interseção entre legenda e botão, e 0 px de overflow horizontal; o dock usa uma coluna nesse intervalo.
@@ -238,7 +237,7 @@ git commit -m "docs: registrar verificação de ui"
 - Menu: foco inicial em “Mapa”, fechamento por `Escape`, retorno ao gatilho e foco no título mesmo ao navegar para a tela atual.
 - O item focado no menu permanece estável quando callbacks do App mudam; `Escape` continua usando o callback mais recente.
 - Link de salto: ativação por teclado focou `#main-content`.
-- Barra do mapa e seleção de rota foram ativadas por teclado; foco visível medido com contorno sólido de 3 px.
+- A seleção de rota foi ativada por teclado; foco visível medido com contorno sólido de 3 px.
 - Controles críticos medidos em 44 px; campos editáveis no mobile medidos em 16 px.
 - Contrastes medidos: texto secundário 5,47:1; eyebrow 4,64:1; botão primário 5,25:1.
 - Regra `prefers-reduced-motion` confirmada na folha de estilos.
