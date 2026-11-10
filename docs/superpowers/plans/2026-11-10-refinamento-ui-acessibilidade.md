@@ -1,6 +1,6 @@
 # Refinamento de UI e acessibilidade — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** aplicar a direção visual aprovada, removendo sobreposições do mapa no mobile e refinando acessibilidade e hierarquia em mobile e desktop.
 
@@ -42,21 +42,21 @@
 **Interfaces:**
 - Produces: ambiente Vitest `jsdom` com matchers de `@testing-library/jest-dom`, limitado a `src/components/**/*.test.jsx`.
 
-- [ ] **Step 1: instalar dependências de teste**
+- [x] **Step 1: instalar dependências de teste**
 
 Run: `npm install --save-dev vitest jsdom @testing-library/react @testing-library/jest-dom @testing-library/user-event`
 
-- [ ] **Step 2: configurar o script e ambiente**
+- [x] **Step 2: configurar o script e ambiente**
 
 Adicionar `test:ui` com `vitest run`; criar `vitest.config.js` com `environment: 'jsdom'`, `setupFiles: ['src/test/setup.js']` e `include: ['src/components/**/*.test.jsx']`; importar `@testing-library/jest-dom/vitest` no setup. Ignorar `.superpowers/brainstorm/` no Git.
 
-- [ ] **Step 3: verificar a infraestrutura**
+- [x] **Step 3: verificar a infraestrutura**
 
 Run: `npm run test:ui -- --passWithNoTests`
 
 Expected: exit 0 sem testes encontrados.
 
-- [ ] **Step 4: commit**
+- [x] **Step 4: commit**
 
 ```bash
 git add .gitignore package.json package-lock.json vitest.config.js src/test/setup.js
@@ -74,31 +74,31 @@ git commit -m "test: preparar testes de interface"
 **Interfaces:**
 - Produces: `MapContextBar()`, com legenda textual das rotas e da área de risco.
 
-- [ ] **Step 1: escrever testes RED**
+- [x] **Step 1: escrever testes RED**
 
 Cobrir: legenda textual sempre presente e ausência do dropdown removido de pontos do mapa.
 
-- [ ] **Step 2: executar e observar falha**
+- [x] **Step 2: executar e observar falha**
 
 Run: `npm run test:ui -- src/components/MapContextBar.test.jsx`
 
 Expected: FAIL porque o componente não existe.
 
-- [ ] **Step 3: implementar o componente e integrar a estrutura**
+- [x] **Step 3: implementar o componente e integrar a estrutura**
 
 Extrair legenda e controles de `main.jsx`. Envolver o Leaflet e seus overlays em `.map-surface`; renderizar `MapContextBar` como irmão da superfície dentro de `.map-area`.
 
-- [ ] **Step 4: aplicar layout aprovado**
+- [x] **Step 4: aplicar layout aprovado**
 
 No mobile, `.map-context` fica no fluxo e `.map-surface` usa `height: clamp(260px, 38svh, 330px)`. No desktop, `.map-context` vira dock na base da superfície. Remover controles e estilos antigos de detalhes do mapa.
 
-- [ ] **Step 5: verificar GREEN**
+- [x] **Step 5: verificar GREEN**
 
 Run: `npm run test:ui -- src/components/MapContextBar.test.jsx`
 
 Expected: todos os testes passam.
 
-- [ ] **Step 6: commit**
+- [x] **Step 6: commit**
 
 ```bash
 git add src/components/MapContextBar.jsx src/components/MapContextBar.test.jsx src/main.jsx src/style.css
@@ -117,27 +117,27 @@ git commit -m "feat: reorganizar controles do mapa"
 - Produces: `MobileNavigation({ open, onClose, onNavigate, alertCount, triggerRef })`.
 - Consumes: `go(next)`, contagem do alerta e referência do botão do menu.
 
-- [ ] **Step 1: escrever testes RED**
+- [x] **Step 1: escrever testes RED**
 
 Cobrir: menu fechado não renderiza navegação; ao abrir, primeira ação recebe foco; `Escape` chama `onClose`; navegação chama `onNavigate('home')` e `onClose` mesmo quando a tela atual já é `home`; fechamento por `Escape`/botão devolve foco ao gatilho; navegação termina com foco no título da nova tela.
 
-- [ ] **Step 2: executar e observar falha**
+- [x] **Step 2: executar e observar falha**
 
 Run: `npm run test:ui -- src/components/MobileNavigation.test.jsx`
 
 Expected: FAIL porque o componente não existe.
 
-- [ ] **Step 3: implementar e integrar**
+- [x] **Step 3: implementar e integrar**
 
 Extrair o menu móvel, adicionar `ref` ao gatilho e incluir link `.skip-link` para `#main-content`. O destino será o início focável do painel principal, antes dos controles Leaflet. Manter foco programático no título, removendo apenas o contorno visual desse título não tabulável. Retornar foco ao gatilho somente ao fechar sem navegar; em navegação, o título da nova tela recebe foco.
 
-- [ ] **Step 4: verificar GREEN**
+- [x] **Step 4: verificar GREEN**
 
 Run: `npm run test:ui -- src/components/MobileNavigation.test.jsx`
 
 Expected: todos os testes passam.
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add src/components/MobileNavigation.jsx src/components/MobileNavigation.test.jsx src/main.jsx src/style.css
@@ -155,25 +155,25 @@ git commit -m "feat: aprimorar navegação por teclado"
 - Consumes: estrutura produzida nas Tasks 2 e 3.
 - Produces: tokens visuais finais e breakpoints aprovados.
 
-- [ ] **Step 1: atualizar cópia estrutural**
+- [x] **Step 1: atualizar cópia estrutural**
 
 Converter rótulos de seção de caixa alta para sentence case, sem mudar significado ou fluxo.
 
-- [ ] **Step 2: aplicar tokens e tipografia**
+- [x] **Step 2: aplicar tokens e tipografia**
 
 Usar a paleta da spec, escurecer textos secundários, manter Manrope/DM Sans e garantir inputs de 16 px no mobile.
 
-- [ ] **Step 3: refinar layout**
+- [x] **Step 3: refinar layout**
 
 Remover a sobreposição negativa do painel no mobile, ajustar painel desktop entre 430 e 500 px, alinhar espaçamentos e manter controles críticos com 44 px em ponteiro impreciso.
 
-- [ ] **Step 4: verificar build e suites**
+- [x] **Step 4: verificar build e suites**
 
 Run: `npm test && npm run test:ui && npm run build`
 
 Expected: todas as suites e build passam.
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add src/ExtraScreens.jsx src/style.css
@@ -189,11 +189,11 @@ git commit -m "style: refinar hierarquia responsiva"
 - Consumes: aplicação completa das Tasks 1–4.
 - Produces: evidência de verificação para entrega.
 
-- [ ] **Step 1: verificar matriz responsiva**
+- [x] **Step 1: verificar matriz responsiva**
 
 No navegador, inspecionar 320×700, 360×800, 390×844, 768×900, 1024×768 e 1440×900; registrar rolagem horizontal, medidas do mapa e da barra de legenda, visibilidade da atribuição e conteúdo longo. Cobrir chuva disponível, desatualizada, carregando e indisponível.
 
-- [ ] **Step 2: verificar teclado**
+- [x] **Step 2: verificar teclado**
 
 Percorrer link de pulo, menu, barra do mapa, rotas e formulários com teclado; confirmar `Escape`, foco visível e retorno do foco. Medir estilos computados de contraste dos textos críticos, alvos de 44 px (incluindo área clicável dos toggles), inputs de 16 px, atribuição e regra de `prefers-reduced-motion`.
 
@@ -201,13 +201,13 @@ Percorrer link de pulo, menu, barra do mapa, rotas e formulários com teclado; c
 
 Executar abertura → mapa → comparação → explicação → trechos → salvar/editar/pausar/excluir rota → alertas → revisar/confirmar relato → preferências → recarregar e conferir persistência, mantendo console sem erros.
 
-- [ ] **Step 4: executar verificação final**
+- [x] **Step 4: executar verificação final**
 
 Run: `npm test && npm run test:ui && npm run build && git diff --check`
 
 Expected: exit 0 em todos os comandos.
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add docs/superpowers/plans/2026-11-10-refinamento-ui-acessibilidade.md
@@ -249,5 +249,10 @@ git commit -m "docs: registrar verificação de ui"
 - Alertas → detalhe do alerta: aprovado.
 - Criar relato → revisar → confirmar → listar: aprovado.
 - Preferências: chuva desativada e severidade alta persistiram após recarregar.
-- Exclusão de rota: o controle e sua confirmação foram revisados, mas a confirmação destrutiva não foi acionada para preservar os dados locais do navegador.
+- Exclusão de rota: teste de interface em jsdom com dados isolados confirmou cancelamento, exclusão apenas da rota escolhida e persistência após remontagem. A confirmação não foi exercitada no navegador real para preservar os dados locais; por isso, o passo de fluxos permanece parcialmente pendente.
 - Console do navegador: nenhum erro registrado durante os fluxos.
+
+### Verificação adicional — 2026-11-10
+
+- Teste de exclusão com dados isolados: cancelamento preserva a rota; confirmação remove somente a rota selecionada e a remoção persiste após remontar a interface.
+- As evidências visuais e de navegação acima foram registradas anteriormente; não foram repetidas nesta verificação.
