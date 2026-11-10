@@ -19,4 +19,18 @@ describe('MapContextBar', () => {
     expect(screen.queryByText('Área R3')).not.toBeInTheDocument();
     expect(screen.queryByText('Ocorrência')).not.toBeInTheDocument();
   });
+
+  it('identifica as camadas fictícias e distingue o histórico', () => {
+    render(<MapContextBar cityMode="history" />);
+    expect(screen.getByText('Alagamento histórico')).toBeInTheDocument();
+    expect(screen.getByText('Área de inundação histórica')).toBeInTheDocument();
+    expect(screen.getByText('Córrego ilustrativo')).toBeInTheDocument();
+  });
+
+  it('identifica as áreas de inundação no modo Agora', () => {
+    render(<MapContextBar cityMode="now" />);
+    expect(screen.getByText('Área de inundação recente')).toBeInTheDocument();
+    expect(screen.getByText('Via interditada')).toBeInTheDocument();
+    expect(screen.getByText('Queda de árvore')).toBeInTheDocument();
+  });
 });

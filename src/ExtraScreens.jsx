@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ArrowLeft, ShieldAlert, MapPin, Plus, Trash2 } from "lucide-react";
-import { occurrences, routes, saveRoute, segments } from "./data/scenario";
+import { occurrences, routes, saveRoute, getOrderedSegments, places } from "./data/scenario";
 import {
   clearPrototypeStorage,
   shouldShowScenarioAlert,
@@ -31,6 +31,8 @@ export default function ExtraScreens({
   resetReadAlerts,
   selectedSegment,
   setSelectedSegment,
+  showAlert,
+  setShowAlert,
 }) {
   const [name, setName] = useState("Minha rota");
   const [days, setDays] = useState("Segunda a sexta");
@@ -48,7 +50,7 @@ export default function ExtraScreens({
   const [accountEmail, setAccountEmail] = useState("");
   const [error, setError] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
-  const [showAlert, setShowAlert] = useState(true);
+  const segments = getOrderedSegments(origin !== places[0]);
   const [success, setSuccess] = useState(false);
   useEffect(() => {
     if (view !== "save") {
@@ -238,7 +240,7 @@ export default function ExtraScreens({
           <span>Mostrar alerta de exemplo</span>
           <input
             type="checkbox"
-            checked={alertVisible}
+            checked={showAlert}
             disabled={!prefs.alerts}
             onChange={(e) => setShowAlert(e.target.checked)}
           />
@@ -248,6 +250,7 @@ export default function ExtraScreens({
             <span>Alertas simulados estão desativados nas preferências.</span>
           </div>
         )}
+        {prefs.alerts && (prefs.incidents === false || prefs.severity === 'Crítica') && <p className="footnote">As preferências de categoria ou severidade ocultam este alerta de exemplo.</p>}
         {alertVisible ? (
           <button
             className="alert-card"

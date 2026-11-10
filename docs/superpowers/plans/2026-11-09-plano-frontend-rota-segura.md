@@ -95,6 +95,31 @@ Essa organização é proposta, não exige criar arquivos vazios antecipadamente
 
 **Pronto quando:** o usuário escolhe origem e destino disponíveis, encontra os dois pontos no mapa e chega à comparação; uma entrada sem correspondência recebe orientação clara.
 
+## Etapa 3A — Mapa da situação da cidade
+
+**O que é:** permitir que a pessoa explore os acontecimentos na cidade sem precisar informar origem e destino ou montar uma rota. A montagem e comparação de trajetos continuam disponíveis.
+
+O mesmo mapa terá uma alternância entre dois modos:
+
+- **Agora:** mostrar ocorrências recentes, como alagamentos e inundações, com horário e origem da informação quando disponíveis. A interface deve indicar quando os dados foram atualizados e distinguir dados desatualizados ou indisponíveis de ausência de ocorrências. Não prometer atualização em tempo real sem uma fonte que a sustente.
+- **Histórico:** apresentar registros anteriores e evidenciar regiões onde acontecimentos se repetem, identificando o período e a fonte disponíveis. Um registro ou concentração histórica não significa que exista uma ocorrência naquele momento nem garante cobertura completa da cidade.
+
+**Implementação:**
+
+- [x] Oferecer acesso à consulta da cidade sem exigir rota, conta ou localização real.
+- [x] Permitir alternar entre “Agora” e “Histórico” no mesmo mapa, identificando claramente o modo selecionado.
+- [x] Mostrar ocorrências e áreas históricas fictícias de maneira coerente com o cenário, com identificação visível de que os dados são simulados.
+- [x] Permitir consultar detalhes por toque e teclado, incluindo tipo, local, fonte e horário ou período fictícios quando disponíveis.
+- [x] Prever legenda textual e estados de carregamento, vazio, dados antigos e indisponibilidade para cada modo; não depender apenas de cor.
+- [ ] Preservar a atribuição cartográfica, a acessibilidade e a responsividade, além do acesso aos fluxos de rotas existentes.
+- [x] Deixar tipos adicionais de acontecimentos, filtros, período histórico e forma de representar concentrações para definição posterior.
+
+**Pronto quando:** uma pessoa consegue abrir o mapa sem montar uma rota, alternar os modos, consultar detalhes de exemplos e compreender a diferença entre uma ocorrência recente e um registro histórico. Nesta fase, ambos os modos são demonstrativos e não representam a situação real da cidade.
+
+**Integração futura:** avaliar fontes, cobertura, frequência de atualização, período histórico e condições de uso antes de substituir os dados fictícios; dados antigos ou lacunas de cobertura devem continuar explícitos.
+
+**Implementação do mock em 10/11/2026:** modos e estados simulados implementados, com detalhes em painel acessível e marcadores no mapa. Testes automatizados, build e navegação dos dois modos no navegador passaram. A revisão visual em diferentes tamanhos e a integração com dados reais permanecem pendentes.
+
 ## Etapa 4 — Comparação e escolha de rotas
 
 **O que é:** mostrar o compromisso entre tempo e exposição. Esta é uma parte central da demonstração e já possui uma primeira versão.

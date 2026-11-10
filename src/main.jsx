@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import ExtraScreens from "./ExtraScreens";
 import MapContextBar from "./components/MapContextBar";
+import CityMapPanel from "./components/CityMapPanel";
+import CityModeTabs from "./components/CityModeTabs";
+import { getCityEvents, illustrativeFloodArea, illustrativeStreams } from "./data/cityMap";
+import { divIcon } from "leaflet";
 import MobileNavigation from "./components/MobileNavigation";
 import {
   routes,
@@ -10,6 +14,7 @@ import {
   places,
   routeFactors,
   canCompareTrip,
+  getOrderedSegments,
 } from "./data/scenario";
 import {
   createInitialPreferences,
@@ -23,6 +28,7 @@ import {
   Polyline,
   Polygon,
   CircleMarker,
+  Marker,
   Popup,
   useMap,
 } from "react-leaflet";
@@ -51,6 +57,13 @@ import "./style.css";
 
 const safer = routes.safe.points;
 const faster = routes.fast.points;
+const cityMarkerIcons = {
+  flood: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-flood"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3C9 7 6.5 9.5 6.5 13a5.5 5.5 0 0 0 11 0C17.5 9.5 15 7 12 3Z"/><path d="M9.5 14.5c.3 1.1 1.2 1.8 2.5 1.9"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
+  inundation: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-inundation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 9c2-2 4 2 6 0s4 2 6 0 4 2 6 0M3 14c2-2 4 2 6 0s4 2 6 0 4 2 6 0M3 19c2-2 4 2 6 0s4 2 6 0 4 2 6 0"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
+  closure: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-closure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m6.5 6.5 11 11"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
+  tree: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-tree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-8m-4 8h8M7 15a4 4 0 0 1-1-7 5 5 0 0 1 10-1 4 4 0 0 1 1 8H7Z"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
+  report: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3Zm0 6v4m0 3v.1"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
+};
 
 const factorIcons = {
   risk: ShieldAlert,
@@ -72,13 +85,28 @@ function Logo() {
 }
 function Recenter({ signal, view }) {
   const map = useMap();
+  const wasCity = useRef(false);
+  useEffect(() => {
+    if (view === "city" && !wasCity.current) map.setView([-23.563, -46.651], 12);
+    if (view !== "city" && wasCity.current) map.setView([-23.568, -46.683], 14);
+    wasCity.current = view === "city";
+  }, [map, view]);
   useEffect(() => {
     if (signal)
       map.setView(
-        view === "alert" ? occurrences[0].position : [-23.568, -46.683],
-        view === "alert" ? 15 : 14,
+        view === "city" ? [-23.563, -46.651] : view === "alert" ? occurrences[0].position : [-23.568, -46.683],
+        view === "city" ? 12 : view === "alert" ? 15 : 14,
       );
   }, [signal, map, view]);
+  return null;
+}
+function LocateCityEvent({selection, markers}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!selection) return;
+    map.setView(selection.event.position, 15);
+    markers.current[selection.event.id]?.openPopup();
+  }, [selection, map, markers]);
   return null;
 }
 function App() {
@@ -89,8 +117,14 @@ function App() {
     [origin, setOrigin] = useState("Minha localização"),
     [destination, setDestination] = useState("Hospital das Clínicas"),
     [toast, setToast] = useState(""),
-    [dataState, setDataState] = useState("available");
+    [dataState, setDataState] = useState("available"),
+    [cityMode, setCityMode] = useState("now"),
+    [cityDataState, setCityDataState] = useState("available"),
+    [showAlert, setShowAlert] = useState(true),
+    [citySelection, setCitySelection] = useState(null);
   const menuTriggerRef = useRef(null);
+  const cityMarkers = useRef({});
+  const mapSurfaceRef = useRef(null);
   const [savedRoutes, setSavedRoutes, resetSavedRoutes] = useStoredState(
       PROTOTYPE_STORAGE_KEYS.savedRoutes,
       [],
@@ -116,6 +150,7 @@ function App() {
   const go = (next) => {
     setView(next);
     document.querySelector(".panel")?.scrollTo(0, 0);
+    if (next === "city") window.scrollTo(0, 0);
   };
   const notify = (s) => {
     setToast(s);
@@ -127,7 +162,7 @@ function App() {
       const heading = document.querySelector(".panel h1");
       if (heading) {
         heading.tabIndex = -1;
-        heading.focus();
+        heading.focus({ preventScroll: true });
       }
     });
   }, [view]);
@@ -141,8 +176,10 @@ function App() {
           : view === "profile"
             ? "profile"
             : "map";
-  const scenarioAlertVisible = shouldShowScenarioAlert(prefs, true);
+  const scenarioAlertVisible = shouldShowScenarioAlert(prefs, showAlert);
   const comparisonAvailable = canCompareTrip(origin, destination, dataState);
+  const currentEvents = getCityEvents(view === 'city' ? cityMode : 'now', reports);
+  const segmentId = getOrderedSegments(origin !== places[0])[selectedSegment].id;
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">
@@ -213,8 +250,9 @@ function App() {
         triggerRef={menuTriggerRef}
       />
       <main className="workspace">
-        <section className="map-area" aria-label="Mapa demonstrativo de rotas">
-          <div className="map-surface">
+        <section className="map-area" aria-label={view === "city" ? "Mapa demonstrativo da cidade" : "Mapa demonstrativo de rotas"}>
+          {view === "city" && <div className="city-tabs-mobile"><CityModeTabs mode={cityMode} onModeChange={setCityMode} /></div>}
+          <div className="map-surface" ref={mapSurfaceRef}>
             <MapContainer
               center={[-23.568, -46.683]}
               zoom={14}
@@ -222,11 +260,13 @@ function App() {
               scrollWheelZoom={true}
             >
               <Recenter signal={centerSignal} view={view} />
+              <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
               <TileLayer
                 attribution="Tiles &copy; Esri &mdash; Sources: Esri, OpenStreetMap contributors"
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
               />
               <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}" />
+              {view !== "city" && <>
               <Polygon
                 positions={zone}
                 pathOptions={{
@@ -285,18 +325,14 @@ function App() {
               >
                 <Popup>Destino demonstrativo</Popup>
               </CircleMarker>
-              <CircleMarker
-                center={occurrences[0].position}
-                radius={13}
-                pathOptions={{
-                  color: "white",
-                  weight: 4,
-                  fillColor: "#df4651",
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>Alagamento demonstrativo</Popup>
-              </CircleMarker>
+              </>}
+              {(view === "city" ? (cityDataState === "available" || cityDataState === "stale") : (dataState === "available" || dataState === "stale")) && <>
+                {illustrativeStreams.map((points, i) => <Polyline key={i} positions={points} pathOptions={{color: '#2586ac', weight: 3, opacity: .85, dashArray: '3 5'}}><Popup>Córrego ilustrativo · geometria fictícia. Sua presença não indica risco por si só.</Popup></Polyline>)}
+                {currentEvents.filter(event => event.kind === 'inundation').map(event => <Polygon key={'area-' + event.id} positions={illustrativeFloodArea(event.position, view !== 'city' || cityMode === 'now' ? 2.2 : 1)} pathOptions={{color: '#dc8b1b', weight: 2, dashArray: view === 'city' && cityMode === 'history' ? '6 5' : undefined, fillColor: '#ffc15b', fillOpacity: .26}}><Popup>Área de inundação ilustrativa · limites fictícios{view === 'city' && cityMode === 'history' ? ' · registro histórico' : ''}</Popup></Polygon>)}
+                {currentEvents.map(event => <Marker ref={marker => { if (marker) cityMarkers.current[event.id] = marker; else delete cityMarkers.current[event.id]; }} key={event.id} position={event.position} icon={cityMarkerIcons[event.kind] || cityMarkerIcons.flood} title={event.title}>
+                  <Popup><strong>{event.title}</strong><br />{event.detail}<br />{event.source}</Popup>
+                </Marker>)}
+              </>}
               {view === "alert" && (
                 <Polyline
                   positions={faster.slice(2, 5)}
@@ -310,9 +346,9 @@ function App() {
               {view === "segments" && (
                 <Polyline
                   positions={
-                    selectedSegment === 0
+                    segmentId === 'origem-e-acesso'
                       ? safer.slice(0, 3)
-                      : selectedSegment === 1
+                      : segmentId === 'risco-e-ocorrencia'
                         ? faster.slice(2, 5)
                         : safer.slice(5)
                   }
@@ -324,7 +360,7 @@ function App() {
                 />
               )}
             </MapContainer>
-            <div className="map-top">
+            {view !== "city" && <div className="map-top">
               <div className="weather">
                 <CloudRain size={19} />
                 <span>
@@ -338,7 +374,7 @@ function App() {
                 </span>
                 <span className="weather-time">simulação</span>
               </div>
-            </div>
+            </div>}
             <div className="map-tools">
               <button
                 aria-label="Centralizar mapa"
@@ -348,7 +384,7 @@ function App() {
               </button>
             </div>
           </div>
-          <MapContextBar />
+          <MapContextBar cityMode={view === "city" ? cityMode : null} />
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
           <div className="panel-inner">
@@ -376,7 +412,10 @@ function App() {
               resetReadAlerts={resetReadAlerts}
               selectedSegment={selectedSegment}
               setSelectedSegment={setSelectedSegment}
+              showAlert={showAlert}
+              setShowAlert={setShowAlert}
             />
+            {view === "city" && <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={event => { setCitySelection({event}); mapSurfaceRef.current?.scrollIntoView({block: 'center'}); }} onBack={() => go("home")} />}
             {view === "home" && (
               <>
                 <div className="eyebrow">
@@ -387,6 +426,7 @@ function App() {
                   Compare rotas e conheça os riscos relacionados à chuva no seu
                   trajeto.
                 </p>
+                <button className="secondary city-entry" onClick={() => go("city")}><MapPin size={18} /> Explorar situação da cidade</button>
                 <div className="search-box">
                   <div className="input-row">
                     <span className="point start" />
@@ -621,6 +661,7 @@ function App() {
                 <div className="source">
                   <Clock3 size={15} /> GeoSampa e SIBH · dados demonstrativos
                 </div>
+                <p className="footnote">Os avisos no mapa são ilustrativos. Esta comparação considera apenas o cenário de rota descrito acima; os demais avisos e relatos não recalculam a rota.</p>
                 <button
                   className="primary"
                   onClick={() =>

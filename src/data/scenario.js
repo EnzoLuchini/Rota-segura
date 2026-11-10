@@ -16,6 +16,14 @@ export const segments = [
   {id:'risco-e-ocorrencia', name:'Área de risco e ocorrência', description:'A alternativa mais rápida cruza a área R3 e o alagamento reportado.', source:'GeoSampa e relatos · dados fictícios', routeId:'fast', occurrenceId:'alagamento-1'},
   {id:'chegada', name:'Chegada ao destino', description:'A rota recomendada evita o trecho de maior exposição identificado.', source:'Comparação ilustrativa · dados fictícios', routeId:'safe'},
 ];
+export function getOrderedSegments(reversed) {
+  if (!reversed) return segments;
+  return [
+    {...segments[2], name: 'Origem e acesso', description: 'Início da viagem invertida no trecho antes da chegada original.'},
+    segments[1],
+    {...segments[0], name: 'Chegada ao destino', description: 'Informação insuficiente para classificar a exposição neste trecho.'},
+  ];
+}
 export function validateTrip(origin, destination) {
   return places.includes(origin) && places.includes(destination) && origin !== destination;
 }

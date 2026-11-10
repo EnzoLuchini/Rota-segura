@@ -18,3 +18,45 @@
 @media(max-width:800px){.panel{width:100%;margin-top:0;border-radius:0}.panel-inner{padding:32px 22px 28px}.panel h1{font-size:clamp(25px,7.1vw,30px);line-height:1.2}.input-row input,.form-field input,.form-field select,.form-field textarea{font-size:16px}.weather{max-width:calc(100vw - 86px)}.weather-time{white-space:nowrap}.leaflet-control-attribution{max-width:calc(100vw - 8px);font-size:9px!important}.primary,.secondary,.route-card,.alert-card,.factor,.segment{min-height:44px}}
 @media(max-width:380px){.panel-inner{padding-left:18px;padding-right:18px}.map-legend{font-size:9px}.map-legend span{gap:5px}.map-legend .line{width:17px}.square{width:12px}}
 @media(min-width:801px) and (max-width:1000px){.map-legend{justify-content:space-between;gap:6px;font-size:9px}.map-legend .line{width:18px}}
+.city-entry { margin-bottom: 20px; }
+.city-disclaimer { background: #eaf2fd; color: #102f62; padding: 12px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
+.city-tabs { display: flex; gap: 8px; margin: 20px 0 12px; }
+.city-tabs button { flex: 1; min-height: 44px; border: 1px solid #9caec4; border-radius: 10px; background: white; color: #102f62; font-weight: 700; cursor: pointer; }
+.city-tabs button[aria-pressed="true"] { color: white; background: #1763e9; border-color: #1763e9; }
+.city-explanation, .city-status { color: #344b65; font-size: 14px; line-height: 1.5; }
+.city-status:not(:empty) { padding: 12px; margin: 12px 0; border-radius: 8px; background: #fff2db; }
+.city-list { margin: 20px 0; }
+.city-list h2 { font-size: 18px; }
+.city-event { border: 1px solid #d7e2ef; border-radius: 12px; margin: 10px 0; overflow: hidden; }
+.city-event button { display: flex; justify-content: space-between; width: 100%; min-height: 48px; padding: 12px 14px; border: 0; background: white; color: #102f62; font-weight: 700; text-align: left; cursor: pointer; }
+.city-event div { padding: 0 14px 14px; color: #344b65; font-size: 14px; }
+.city-marker-shell { background: transparent; border: 0; }
+.city-marker { display: grid; place-items: center; width: 36px; height: 36px; color: white; border: 3px solid white; box-shadow: 0 2px 8px #102f6250; }
+.city-marker svg { width: 20px; height: 20px; }
+.city-marker-flood { background: #c74349; border-radius: 50%; }
+.city-marker-inundation { background: #a95c00; border-radius: 10px; }
+.city-marker-closure { background: #9f3343; border-radius: 10px; }
+.city-marker-tree { background: #376f5b; border-radius: 10px; }
+.city-marker-report { background: #42618d; border-radius: 10px; }
+.city-event .city-locate { color: #145eea; border: 1px solid #d4e2fa; border-radius: 8px; justify-content: center; margin-top: 12px; }
+.city-legend-closure { display: inline-flex; color: #9f3343; flex: none; }
+.city-legend-tree { display: inline-flex; color: #376f5b; flex: none; }
+.city-legend-icon,.city-legend-stream { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.city-legend-icon { color: #c74349; }
+.city-legend-area { display: inline-block; width: 17px; height: 12px; flex: none; border: 2px dashed #c67b16; border-radius: 3px; background: #ffdf9f; }
+.city-legend-area-current { border-style: solid; }
+.city-legend-stream { color: #2586ac; }
+.map-legend:has(.city-legend-icon) { flex-wrap: wrap; justify-content: flex-start; gap: 8px 15px; }
+.map-legend:has(.city-legend-icon) span { white-space: normal; }
+.city-tabs-mobile { display: none; }
+.city-simulation { margin: 20px 0; border-top: 1px solid #e4ebf4; border-bottom: 1px solid #e4ebf4; }
+.city-simulation summary { min-height: 44px; display: flex; align-items: center; gap: 8px; color: #506785; font-size: 13px; font-weight: 700; cursor: pointer; }
+.city-simulation summary::before { content: '›'; font-size: 20px; transition: transform .2s; }
+.city-simulation[open] summary::before { transform: rotate(90deg); }
+.city-simulation .form-field { margin: 0 0 14px; }
+.city-simulation summary:focus-visible { outline: 3px solid #74a9ff; outline-offset: 3px; }
+@media(max-width:800px) {
+  .city-tabs-mobile { display: block; padding: 10px 18px; background: #fff; }
+  .city-tabs-mobile .city-tabs { margin: 0; }
+  .city-tabs-desktop { display: none; }
+}
