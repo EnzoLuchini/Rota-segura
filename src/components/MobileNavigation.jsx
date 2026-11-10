@@ -22,6 +22,11 @@ function focusMainHeading() {
 
 export default function MobileNavigation({open, onClose, onNavigate, alertCount, triggerRef}) {
   const firstActionRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -30,13 +35,13 @@ export default function MobileNavigation({open, onClose, onNavigate, alertCount,
     const handleKeyDown = event => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      onClose();
+      onCloseRef.current();
       requestAnimationFrame(() => triggerRef.current?.focus());
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, triggerRef]);
+  }, [open, triggerRef]);
 
   if (!open) return null;
 

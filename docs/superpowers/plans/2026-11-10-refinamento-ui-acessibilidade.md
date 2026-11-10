@@ -231,10 +231,12 @@ git commit -m "docs: registrar verificação de ui"
 - Em 320 px, os quatro pontos expandidos permanecem no fluxo e não cobrem a cartografia.
 - Estados disponível, desatualizado, carregando e indisponível foram exercitados em 390 px; mensagens, bloqueio do botão e rótulo de chuva corresponderam ao estado, sem overflow horizontal.
 - Em 1024 px o painel mediu 430 px e o mapa continuou utilizável; em 1440 px o painel permaneceu dentro do limite de 500 px.
+- Revisão adicional do intervalo desktop/tablet: 801, 820, 850, 900 e 1000 px apresentaram 0 px² de interseção entre legenda e botão, e 0 px de overflow horizontal; o dock usa uma coluna nesse intervalo.
 
 ### Acessibilidade
 
 - Menu: foco inicial em “Mapa”, fechamento por `Escape`, retorno ao gatilho e foco no título mesmo ao navegar para a tela atual.
+- O item focado no menu permanece estável quando callbacks do App mudam; `Escape` continua usando o callback mais recente.
 - Link de salto: ativação por teclado focou `#main-content`.
 - Barra do mapa e seleção de rota foram ativadas por teclado; foco visível medido com contorno sólido de 3 px.
 - Controles críticos medidos em 44 px; campos editáveis no mobile medidos em 16 px.

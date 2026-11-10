@@ -60,4 +60,29 @@ describe('MobileNavigation', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.getByRole('heading', {name: 'Mapa principal'})).toHaveFocus());
   });
+
+  it('preserva o item focado quando callbacks mudam durante o menu aberto', async () => {
+    const triggerRef = createRef();
+    const firstClose = vi.fn();
+    const latestClose = vi.fn();
+    const {rerender} = render(
+      <>
+        <button ref={triggerRef}>Abrir menu</button>
+        <MobileNavigation open alertCount={1} onClose={firstClose} onNavigate={vi.fn()} triggerRef={triggerRef}/>
+      </>,
+    );
+    await waitFor(() => expect(screen.getByRole('button', {name: 'Mapa'})).toHaveFocus());
+    screen.getByRole('button', {name: 'Alertas (1)'}).focus();
+
+    rerender(
+      <>
+        <button ref={triggerRef}>Abrir menu</button>
+        <MobileNavigation open alertCount={1} onClose={latestClose} onNavigate={vi.fn()} triggerRef={triggerRef}/>
+      </>,
+    );
+
+    expect(screen.getByRole('button', {name: 'Alertas (1)'})).toHaveFocus();
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(latestClose).toHaveBeenCalledTimes(1);
+  });
 });
