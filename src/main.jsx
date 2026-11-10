@@ -488,7 +488,7 @@ function App() {
                 </button>
                 <div className="section-heading">
                   <div>
-                    <span className="overline">NO SEU CAMINHO</span>
+                    <span className="overline">No seu caminho</span>
                     <h2>Fique por dentro</h2>
                   </div>
                   <button className="text-button" onClick={() => go("alerts")}>
@@ -535,7 +535,7 @@ function App() {
                 <button className="back" onClick={() => go("home")}>
                   <ArrowLeft size={18} /> Voltar ao início
                 </button>
-                <span className="overline">SUA VIAGEM</span>
+                <span className="overline">Sua viagem</span>
                 <h1>Compare suas rotas</h1>
                 <p className="intro route-address">
                   {origin || "Origem"} <ArrowRight size={15} />{" "}
@@ -567,7 +567,7 @@ function App() {
                     <span className="route-content">
                       <span className="route-label">
                         Menor exposição conhecida{" "}
-                        <span className="recommended">✓ RECOMENDADA</span>
+                        <span className="recommended">✓ Recomendada</span>
                       </span>
                       <span className="route-stats">
                         <strong>24 min</strong>
@@ -588,7 +588,7 @@ function App() {
                     <span className="route-content">
                       <span className="route-label">
                         Mais rápida{" "}
-                        <span className="risk-badge">⚠ MAIOR EXPOSIÇÃO</span>
+                        <span className="risk-badge">⚠ Maior exposição</span>
                       </span>
                       <span className="route-stats">
                         <strong>18 min</strong>
@@ -648,7 +648,7 @@ function App() {
                 <button className="back" onClick={() => go("compare")}>
                   <ArrowLeft size={18} /> Voltar para rotas
                 </button>
-                <span className="overline">ENTENDA A RECOMENDAÇÃO</span>
+                <span className="overline">Entenda a recomendação</span>
                 <h1>Por que esta rota?</h1>
                 <p className="intro">
                   Uma visão dos fatores considerados na comparação do seu
