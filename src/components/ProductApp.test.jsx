@@ -4,6 +4,31 @@ import {expect,it,vi} from 'vitest';
 import userEvent from '@testing-library/user-event';
 vi.mock('react-leaflet',()=>({MapContainer:({children})=><div>{children}</div>,TileLayer:({url})=><span data-testid="basemap-url">{url}</span>,Polyline:()=>null,Polygon:()=>null,GeoJSON:()=> <div data-testid="areas-de-risco"/>,CircleMarker:({children})=><div>{children}</div>,Marker:()=>null,Popup:({children})=><div>{children}</div>,useMap:()=>({invalidateSize:()=>{},fitBounds:()=>{},setView:()=>{}}),useMapEvents:()=>null}));
 import App from '../main';
+import {REAL_SAVED_ROUTES_KEY} from '../state/useRealSavedRoutes';
+
+it('permite guardar a viagem real e reutilizar seus pontos depois de recarregar',async()=>{
+  const user=userEvent.setup();
+  const response=value=>Promise.resolve({ok:true,json:async()=>value});
+  vi.stubGlobal('fetch',vi.fn(url=>url.includes('/api/places')?response({places:[{label:url.includes('Origem')?'Origem escolhida':'Destino escolhido',coordinates:url.includes('Origem')?[-46.7,-23.6]:[-46.6,-23.5]}]}):response({routes:[{geometry:{coordinates:[[-46.7,-23.6],[-46.6,-23.5]]},summary:{duration:900,distance:5000},exposureMeters:0,evidence:[]}],riskAvailable:true,riskAreas:[]})));
+  const previousScroll=HTMLElement.prototype.scrollTo;HTMLElement.prototype.scrollTo=vi.fn();
+  try{
+    const view=render(<App real/>);
+    await user.type(screen.getByLabelText('Origem'),'Origem');
+    await user.click(await screen.findByRole('button',{name:'Origem escolhida'}));
+    await user.type(screen.getByLabelText('Destino'),'Destino');
+    await user.click(await screen.findByRole('button',{name:'Destino escolhido'}));
+    await user.click(screen.getByRole('button',{name:'Comparar rotas'}));
+    await user.click(await screen.findByRole('button',{name:/salvar como rota frequente/i}));
+    await user.click(screen.getByRole('button',{name:/salvar neste navegador/i}));
+    expect(screen.getByText(/Origem escolhida.*Destino escolhido/)).toBeInTheDocument();
+    view.unmount();render(<App real/>);
+    await user.click(screen.getByRole('button',{name:'Minhas rotas'}));
+    await user.click(screen.getByRole('button',{name:/consultar novamente/i}));
+    expect(screen.getByLabelText('Origem')).toHaveValue('Origem escolhida');
+    expect(screen.getByLabelText('Destino')).toHaveValue('Destino escolhido');
+    expect(screen.getByRole('button',{name:'Comparar rotas'})).toBeEnabled();
+  }finally{localStorage.removeItem(REAL_SAVED_ROUTES_KEY);vi.unstubAllGlobals();HTMLElement.prototype.scrollTo=previousScroll;}
+});
 
 it('apresenta a consulta real no próprio fluxo visual do mock sem cenário fictício',()=>{
   render(<App real/>);

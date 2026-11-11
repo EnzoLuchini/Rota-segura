@@ -2,6 +2,40 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from './api.js';
 
+test('chuva é consultada por padrão sem exigir configuração', async () => {
+  const server=createServer({rain:async()=>({stations:[],queriedAt:'2026-11-11T18:30:00Z'})});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try {
+    const response=await fetch(`http://127.0.0.1:${server.address().port}/api/rain`);
+    assert.equal(response.status,200);
+    assert.deepEqual((await response.json()).stations,[]);
+  } finally {server.close();}
+});
+
+test('consulta de chuva informa indisponibilidade quando desativada e falhas da fonte', async () => {
+  for (const [options,status] of [[{rainEnabled:false},503],[{rainEnabled:true,rain:async()=>{throw Error('falha');}},502],[{rainEnabled:true,rain:async()=>({stations:[],queriedAt:'2026-11-11T18:30:00Z'})},200]]) {
+    const server=createServer(options);
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try {
+      const response=await fetch(`http://127.0.0.1:${server.address().port}/api/rain`);
+      assert.equal(response.status,status);
+      const data=await response.json();
+      if(status===200) assert.deepEqual(data.stations,[]); else assert.ok(data.error);
+    } finally {server.close();}
+  }
+});
+
+test('rotas rejeitam corpo JSON nulo como pedido inválido', async () => {
+  const server = createServer({key:'test'});
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/routes`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:'null'
+    });
+    assert.equal(response.status, 400);
+  } finally { server.close(); }
+});
+
 test('busca sem chave informa indisponibilidade em vez de retornar dados simulados', async () => {
   const server = createServer({key:''});
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));

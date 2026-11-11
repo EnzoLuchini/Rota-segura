@@ -19,15 +19,54 @@ const icons=Object.fromEntries(Object.entries(symbols).map(([kind,path])=>[kind,
 })]));
 export const historyIcon=type=>icons[historyKind(type)];
 export const historyLabel=type=>`Registro histórico de ${historyKind(type)}`;
-export function groupHistoryFeatures(features,project,cellSize=48) {
-  const groups=new Map();
-  for(const feature of features) {
-    const [lon,lat]=feature.geometry.coordinates, pixel=project([lon,lat]);
-    const key=`${Math.floor(pixel.x/cellSize)}:${Math.floor(pixel.y/cellSize)}`;
-    if(!groups.has(key))groups.set(key,{key,features:[],lon:0,lat:0});
-    const group=groups.get(key);group.features.push(feature);group.lon+=lon;group.lat+=lat;
+// Agrupa pela distância entre os centros projetados, inclusive nas bordas da grade.
+// Repete após mover o centro de um grupo para que os próprios grupos não colidam.
+export function groupHistoryFeatures(features,project,spacing=52) {
+  let groups=features.map((feature,index)=>{
+    const [lon,lat]=feature.geometry.coordinates;
+    const pixel=project([lon,lat]);
+    return {features:[feature],lon,lat,x:pixel.x,y:pixel.y,count:1,index};
+  });
+  let merged;
+  do {
+    merged=false;
+    const buckets=new Map(), next=[];
+    for(const group of groups) {
+      const gx=Math.floor(group.x/spacing), gy=Math.floor(group.y/spacing);
+      let target;
+      for(let dx=-1;dx<=1 && !target;dx++) for(let dy=-1;dy<=1 && !target;dy++) {
+        target=(buckets.get(`${gx+dx}:${gy+dy}`) || []).find(other=>Math.abs(other.x-group.x)<spacing && Math.abs(other.y-group.y)<spacing);
+      }
+      if(target) {
+        target.features.push(...group.features);
+        target.lon+=group.lon;target.lat+=group.lat;
+        target.x=(target.x*target.count+group.x*group.count)/(target.count+group.count);
+        target.y=(target.y*target.count+group.y*group.count)/(target.count+group.count);
+        target.count+=group.count;
+        merged=true;
+      } else {
+        const copy={...group,features:[...group.features]};
+        next.push(copy);
+        const key=`${gx}:${gy}`;
+        if(!buckets.has(key))buckets.set(key,[]);
+        buckets.get(key).push(copy);
+      }
+    }
+    groups=next;
+  } while(merged);
+  return groups.map(group=>({...group,key:group.features.map((feature,i)=>feature.id ?? `${group.index}-${i}`).join('|'),position:[group.lat/group.count,group.lon/group.count]}));
+}
+
+export function mergeHistoryFeatures(mapFeatures,routeEvents) {
+  const result=[...mapFeatures], indices=new Map();
+  result.forEach((feature,index)=>{if(feature.id != null)indices.set(feature.id,index);});
+  for(const event of routeEvents) {
+    const index=event.id == null ? undefined : indices.get(event.id);
+    const existing=index === undefined ? null : result[index];
+    const feature={...existing,id:event.id,geometry:existing?.geometry || {type:'Point',coordinates:event.coordinates},properties:{...existing?.properties,dc_tipo_ocorrencia:event.type ?? existing?.properties?.dc_tipo_ocorrencia,dt_ocorrencia:event.date ?? existing?.properties?.dt_ocorrencia,dt_carga:event.loadedAt ?? existing?.properties?.dt_carga,distanceMeters:event.distanceMeters}};
+    if(index === undefined) {if(event.id != null)indices.set(event.id,result.length);result.push(feature);} else result[index]=feature;
   }
-  return [...groups.values()].map(group=>({...group,position:[group.lat/group.features.length,group.lon/group.features.length]}));
+  return result;
 }
 export function historyGroupIcon(count) {
   return divIcon({className:'real-history-marker-shell',html:`<span class="real-history-cluster" aria-hidden="true"><span>${Number(count)}</span><small>H</small></span>`,iconSize:[38,38],iconAnchor:[19,19],popupAnchor:[0,-19]});

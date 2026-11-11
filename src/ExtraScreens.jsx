@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, ShieldAlert, MapPin, Plus, Trash2 } from "lucide-react";
-import { occurrences, routes, saveRoute, getOrderedSegments, places } from "./data/scenario";
+import { occurrences, routes, saveRoute, getOrderedSegments, places, reportLocation } from "./data/scenario";
 import {
   clearPrototypeStorage,
   shouldShowScenarioAlert,
@@ -8,6 +9,9 @@ import {
 import { retainEditIdForView } from "./state/routeEditing";
 
 export default function ExtraScreens({
+  real = false,
+  savedRoutesError = '',
+  onUseRoute,
   view,
   go,
   selected,
@@ -50,6 +54,16 @@ export default function ExtraScreens({
   const [accountEmail, setAccountEmail] = useState("");
   const [error, setError] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const clearTriggerRef = useRef(null);
+  const clearCancelRef = useRef(null);
+  const clearConfirmRef = useRef(null);
+  useEffect(() => {
+    if (confirmClear) clearCancelRef.current?.focus();
+  }, [confirmClear]);
+  const closeClearDialog = () => {
+    setConfirmClear(false);
+    clearTriggerRef.current?.focus();
+  };
   const segments = getOrderedSegments(origin !== places[0]);
   const [success, setSuccess] = useState(false);
   useEffect(() => {
@@ -106,33 +120,31 @@ export default function ExtraScreens({
       return;
     }
     const previous = savedRoutes.find((item) => item.id === editId);
-    setSavedRoutes(
-      saveRoute(savedRoutes, {
+    const route = {
         id: editId || String(Date.now()),
         name: name.trim(),
-        routeId: selected,
         origin: previous?.origin ?? origin,
         destination: previous?.destination ?? destination,
         days,
         outbound,
         returnTime,
-        lead,
         mode,
-        enabled: previous?.enabled ?? true,
-      }),
-    );
+        ...(real ? {} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
+    };
+    if (real && (!route.origin?.coordinates || !route.destination?.coordinates)) {setError('Selecione origem e destino reais antes de salvar.');return;}
+    if (setSavedRoutes(saveRoute(savedRoutes, route)) === false) return;
     setEditId(null);
     setError("");
     go("saved");
   };
   const beginEdit = (item) => {
-    setSelected(item.routeId);
+    if (!real) setSelected(item.routeId);
     setEditId(item.id);
     setName(item.name);
     setDays(item.days);
     setOutbound(item.outbound);
     setReturnTime(item.returnTime);
-    setLead(item.lead);
+    setLead(item.lead ?? '30');
     setMode(item.mode);
     go("save");
   };
@@ -223,6 +235,8 @@ export default function ExtraScreens({
           <strong>{segments[selectedSegment].name}</strong>
           <p>{segments[selectedSegment].description}</p>
           <p>{segments[selectedSegment].source}</p>
+          <p>{segments[selectedSegment].period}</p>
+          <p>{segments[selectedSegment].relation}</p>
         </div>
       </>
     );
@@ -324,7 +338,7 @@ export default function ExtraScreens({
           <label className="form-field">
             Local
             <select>
-              <option>Pinheiros · trecho ilustrativo</option>
+              <option>{reportLocation.label}</option>
             </select>
           </label>
           <label className="form-field">
@@ -367,7 +381,7 @@ export default function ExtraScreens({
           <div className="review-box">
             <strong>Confira seu relato</strong>
             <p>
-              {draft.type} em Pinheiros · {draft.severity} · via transitável:{" "}
+              {draft.type} em {reportLocation.shortLabel} · {draft.severity} · via transitável:{" "}
               {draft.passable}
             </p>
             <p>{draft.description}</p>
@@ -424,7 +438,7 @@ export default function ExtraScreens({
             <strong>
               {report.type} · {report.severity}
             </strong>
-            <p>Pinheiros · via transitável: {report.passable}</p>
+            <p>{reportLocation.shortLabel} · via transitável: {report.passable}</p>
             <small>
               Relato comunitário simulado · não é confirmação oficial
             </small>
@@ -458,7 +472,7 @@ export default function ExtraScreens({
         {title(
           "Rota frequente",
           editId ? "Editar rota" : "Salvar rota",
-          "As escolhas ficam apenas neste navegador.",
+          real ? "A origem e o destino ficam neste navegador. A próxima consulta calcula novas alternativas." : "As escolhas ficam apenas neste navegador.",
         )}
         <form onSubmit={persistRoute}>
           {field("Nome da rota", name, setName)}
@@ -466,8 +480,7 @@ export default function ExtraScreens({
             Modal
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option>Carro</option>
-              <option>A pé</option>
-              <option>Transporte público</option>
+              {!real && <><option>A pé</option><option>Transporte público</option></>}
             </select>
           </label>
           <label className="form-field">
@@ -480,18 +493,19 @@ export default function ExtraScreens({
           </label>
           {field("Horário de ida", outbound, setOutbound, "time")}
           {field("Horário de volta", returnTime, setReturnTime, "time")}
-          <label className="form-field">
+          {!real && <label className="form-field">
             Antecedência
             <select value={lead} onChange={(e) => setLead(e.target.value)}>
               <option value="15">15 minutos</option>
               <option value="30">30 minutos</option>
               <option value="60">1 hora</option>
             </select>
-          </label>
+          </label>}
           <p className="footnote">
-            Avisos são apenas simulados. Não há envio de notificações.
+            {real ? 'As rotas ficam neste navegador. Outras pessoas que o utilizem podem acessá-las. Não há envio de notificações.' : 'Avisos são apenas simulados. Não há envio de notificações.'}
           </p>
           {error && <p className="form-error">{error}</p>}
+          {savedRoutesError && <p className="form-error" role="alert">{savedRoutesError}</p>}
           <button className="primary">Salvar neste navegador</button>
         </form>
       </>
@@ -505,7 +519,7 @@ export default function ExtraScreens({
           "Rotas frequentes",
           "Rotas guardadas neste navegador.",
         )}{" "}
-        {savedRoutes.length === 0 ? (
+        {savedRoutes.length === 0 && !savedRoutesError ? (
           <div className="empty-state">
             Você ainda não salvou nenhuma rota.
             <button className="secondary" onClick={() => go("home")}>
@@ -516,22 +530,22 @@ export default function ExtraScreens({
           savedRoutes.map((item) => (
             <div className="local-card" key={item.id}>
               <strong>{item.name}</strong>
-              <p>
+              {!real && <p>
                 {routes[item.routeId]?.title} · {routes[item.routeId]?.minutes}{" "}
                 min
-              </p>
+              </p>}
               <small>
-                {item.origin || "Minha localização"} →{" "}
-                {item.destination || "Hospital das Clínicas"}
+                {real ? item.origin?.label : (item.origin || places[0])} →{" "}
+                {real ? item.destination?.label : (item.destination || places[1])}
               </small>
               <br />
               <small>
-                {item.days} · volta {item.returnTime} ·{" "}
-                {item.enabled ? "Alertas ativados" : "Alertas pausados"}
+                {item.days} · volta {item.returnTime}{!real && <> · {item.enabled ? "Alertas ativados" : "Alertas pausados"}</>}
               </small>
               <div className="card-actions">
                 <button onClick={() => beginEdit(item)}>Editar</button>
-                <button
+                {real && <button onClick={()=>onUseRoute(item)}>Consultar novamente</button>}
+                {!real && <button
                   onClick={() =>
                     setSavedRoutes(
                       savedRoutes.map((r) =>
@@ -541,7 +555,7 @@ export default function ExtraScreens({
                   }
                 >
                   {item.enabled ? "Pausar" : "Ativar"} alertas
-                </button>
+                </button>}
                 <button
                   onClick={() => {
                     if (
@@ -558,9 +572,8 @@ export default function ExtraScreens({
             </div>
           ))
         )}
-        <p className="footnote">
-          Alertas e horários são simulados; nenhuma notificação será enviada.
-        </p>
+        {savedRoutesError && <p className="form-error" role="alert">{savedRoutesError}</p>}
+        <p className="footnote">{real ? 'Dados guardados neste navegador; ao limpar seus dados, as rotas podem ser apagadas. Nenhuma notificação será enviada.' : 'Alertas e horários são simulados; nenhuma notificação será enviada.'}</p>
       </>
     );
   if (view === "profile")
@@ -610,14 +623,30 @@ export default function ExtraScreens({
         >
           {profile ? "Sair da conta simulada" : "Entrar com conta simulada"}
         </button>
-        <button className="text-danger" onClick={() => setConfirmClear(true)}>
+        <button ref={clearTriggerRef} className="text-danger" onClick={() => setConfirmClear(true)}>
           Apagar dados locais
         </button>
-        {confirmClear && (
+        {confirmClear && createPortal(
+          <div className="clear-dialog-backdrop">
           <div
-            className="review-box"
+            className="review-box clear-dialog"
             role="alertdialog"
             aria-labelledby="clear-data-title"
+            aria-modal="true"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                closeClearDialog();
+              } else if (event.key === "Tab") {
+                if (event.shiftKey && document.activeElement === clearConfirmRef.current) {
+                  event.preventDefault();
+                  clearCancelRef.current?.focus();
+                } else if (!event.shiftKey && document.activeElement === clearCancelRef.current) {
+                  event.preventDefault();
+                  clearConfirmRef.current?.focus();
+                }
+              }
+            }}
           >
             <strong id="clear-data-title">
               Apagar rotas, relatos, preferências e conta simulada deste
@@ -625,6 +654,7 @@ export default function ExtraScreens({
             </strong>
             <p>Outros dados e sites não serão alterados.</p>
             <button
+              ref={clearConfirmRef}
               className="secondary"
               onClick={() => {
                 clearPrototypeStorage(localStorage);
@@ -633,18 +663,20 @@ export default function ExtraScreens({
                 resetPrefs();
                 resetProfile();
                 resetReadAlerts();
-                setConfirmClear(false);
+                closeClearDialog();
               }}
             >
               Confirmar exclusão
             </button>
             <button
+              ref={clearCancelRef}
               className="secondary"
-              onClick={() => setConfirmClear(false)}
+              onClick={closeClearDialog}
             >
               Cancelar
             </button>
           </div>
+          </div>, document.body
         )}
       </>
     );

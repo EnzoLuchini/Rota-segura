@@ -3,11 +3,13 @@ import ExtraScreens from "./ExtraScreens";
 import MapContextBar from "./components/MapContextBar";
 import RealMapLegend from "./components/RealMapLegend";
 import MapLayerControls from "./components/MapLayerControls";
+import RainLayer from "./components/RainLayer";
 import MapResizeObserver from "./components/MapResizeObserver";
 import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
 import Logo from "./components/Logo";
 import CityMapPanel from "./components/CityMapPanel";
+import ScenarioMarkers from "./components/ScenarioMarkers";
 import CityModeTabs from "./components/CityModeTabs";
 import { getCityEvents, illustrativeFloodArea, illustrativeStreams } from "./data/cityMap";
 import { divIcon } from "leaflet";
@@ -20,6 +22,7 @@ import {
   routeFactors,
   canCompareTrip,
   getOrderedSegments,
+  scenarioAlert,
 } from "./data/scenario";
 import {
   createInitialPreferences,
@@ -27,6 +30,7 @@ import {
   shouldShowScenarioAlert,
 } from "./state/prototypeStorage";
 import { useStoredState } from "./state/useStoredState";
+import { useRealSavedRoutes } from "./state/useRealSavedRoutes";
 import {
   MapContainer,
   TileLayer,
@@ -111,7 +115,7 @@ function LocateCityEvent({selection, markers}) {
   useEffect(() => {
     if (!selection) return;
     map.setView(selection.event.position, 15);
-    markers.current[selection.event.id]?.openPopup();
+    requestAnimationFrame(() => markers.current[selection.event.id]?.openPopup());
   }, [selection, map, markers]);
   return null;
 }
@@ -129,6 +133,10 @@ export default function App({real = false}) {
     [showAlert, setShowAlert] = useState(true),
     [citySelection, setCitySelection] = useState(null);
   const realData = useRealRoutes();
+  const [realSavedRoutes,setRealSavedRoutes,realSavedError] = useRealSavedRoutes();
+  const [sheetOpen, setSheetOpen] = useState(true);
+  const sheetTouchStart = useRef(null);
+  const sheetDragged = useRef(false);
   const menuTriggerRef = useRef(null);
   const cityMarkers = useRef({});
   const mapSurfaceRef = useRef(null);
@@ -155,7 +163,8 @@ export default function App({real = false}) {
     [selectedSegment, setSelectedSegment] = useState(0),
     [centerSignal, setCenterSignal] = useState(0);
   const go = (next) => {
-    if (real && !["home", "compare"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    if (real && !["home", "compare", "save", "saved"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    setSheetOpen(true);
     setView(next);
     if (next !== 'city') setCitySelection(null);
     document.querySelector(".panel")?.scrollTo(0, 0);
@@ -188,7 +197,7 @@ export default function App({real = false}) {
   const scenarioAlertVisible = shouldShowScenarioAlert(prefs, showAlert);
   const comparisonAvailable = canCompareTrip(origin, destination, dataState);
   const currentEvents = getCityEvents(view === 'city' ? cityMode : 'now', reports);
-  const segmentId = getOrderedSegments(origin !== places[0])[selectedSegment].id;
+  const selectedScenarioSegment = getOrderedSegments(origin !== places[0])[selectedSegment];
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">
@@ -259,7 +268,7 @@ export default function App({real = false}) {
         alertCount={real ? 0 : (scenarioAlertVisible ? 1 : 0)}
         triggerRef={menuTriggerRef}
       />
-      <main className="workspace">
+      <main className={"workspace " + (sheetOpen ? "sheet-open" : "sheet-closed")}>
         <section className="map-area" aria-label={real ? "Mapa de rotas e informações geográficas" : view === "city" ? "Mapa demonstrativo da cidade" : "Mapa demonstrativo de rotas"}>
           {view === "city" && <div className="city-tabs-mobile"><CityModeTabs mode={cityMode} onModeChange={setCityMode} /></div>}
           <div className="map-surface" ref={mapSurfaceRef}>
@@ -290,8 +299,8 @@ export default function App({real = false}) {
                 maxNativeZoom={20}
                 keepBuffer={2}
               />}
-              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} excludeIds={(realData.routes[realData.selected]?.floodContext?.history.events || []).map(event=>event.id)}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
-              {real && <><FloodAreas period={realData.floodPeriod}/><RouteFloodHighlights route={realData.routes[realData.selected]}/></>}
+              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} routeEvents={realData.routes[realData.selected]?.floodContext?.history.events || []}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {real && <><RainLayer enabled={realData.rain}/><FloodAreas period={realData.floodPeriod}/><RouteFloodHighlights route={realData.routes[realData.selected]} showMarkers={false}/></>}
               {!real && view !== "city" && <>
               <Polygon
                 positions={zone}
@@ -355,13 +364,11 @@ export default function App({real = false}) {
               {!real && (view === "city" ? (cityDataState === "available" || cityDataState === "stale") : (dataState === "available" || dataState === "stale")) && <>
                 {illustrativeStreams.map((points, i) => <Polyline key={i} positions={points} pathOptions={{color: '#2586ac', weight: 3, opacity: .85, dashArray: '3 5'}}><Popup>Córrego ilustrativo · geometria fictícia. Sua presença não indica risco por si só.</Popup></Polyline>)}
                 {currentEvents.filter(event => event.kind === 'inundation').map(event => <Polygon key={'area-' + event.id} positions={illustrativeFloodArea(event.position, view !== 'city' || cityMode === 'now' ? 2.2 : 1)} pathOptions={{color: '#dc8b1b', weight: 2, dashArray: view === 'city' && cityMode === 'history' ? '6 5' : undefined, fillColor: '#ffc15b', fillOpacity: .26}}><Popup>Área de inundação ilustrativa · limites fictícios{view === 'city' && cityMode === 'history' ? ' · registro histórico' : ''}</Popup></Polygon>)}
-                {currentEvents.map(event => <Marker ref={marker => { if (marker) cityMarkers.current[event.id] = marker; else delete cityMarkers.current[event.id]; }} key={event.id} position={event.position} icon={cityMarkerIcons[event.kind] || cityMarkerIcons.flood} title={event.title}>
-                  <Popup><strong>{event.title}</strong><br />{event.detail}<br />{event.source}</Popup>
-                </Marker>)}
+                <ScenarioMarkers events={currentEvents} icons={cityMarkerIcons} markers={cityMarkers} />
               </>}
               {!real && view === "alert" && (
                 <Polyline
-                  positions={faster.slice(2, 5)}
+                  positions={getOrderedSegments(false).find(segment => segment.id === 'risco-e-ocorrencia').points}
                   pathOptions={{
                     color: "#d9364f",
                     weight: 10,
@@ -371,13 +378,7 @@ export default function App({real = false}) {
               )}
               {!real && view === "segments" && (
                 <Polyline
-                  positions={
-                    segmentId === 'origem-e-acesso'
-                      ? safer.slice(0, 3)
-                      : segmentId === 'risco-e-ocorrencia'
-                        ? faster.slice(2, 5)
-                        : safer.slice(5)
-                  }
+                  positions={selectedScenarioSegment.points}
                   pathOptions={{
                     color: "#ec9223",
                     weight: 10,
@@ -386,7 +387,7 @@ export default function App({real = false}) {
                 />
               )}
             </MapContainer>
-            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Dados de chuva indisponíveis</span></div><div id="flood-status" role="status" className="map-layer-status"/></div> : view !== "city" && <div className="map-top">
+            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Chuva por estação nas camadas</span></div><div id="flood-status" role="status" className="map-layer-status"/></div> : view !== "city" && <div className="map-top">
               <div className="weather">
                 <CloudRain size={19} />
                 <span>
@@ -401,7 +402,7 @@ export default function App({real = false}) {
                 <span className="weather-time">simulação</span>
               </div>
             </div>}
-            {real && <MapLayerControls water={realData.water} onWaterChange={realData.setWater} risk={realData.risk} onRiskChange={realData.setRisk} riskAvailable={realData.riskAvailable} hasRoutes={realData.routes.length>0} history={realData.history} onHistoryChange={realData.setHistory} floodPeriod={realData.floodPeriod} onFloodPeriodChange={realData.setFloodPeriod}/>}
+            {real && <MapLayerControls rain={realData.rain} onRainChange={realData.setRain} water={realData.water} onWaterChange={realData.setWater} risk={realData.risk} onRiskChange={realData.setRisk} riskAvailable={realData.riskAvailable} hasRoutes={realData.routes.length>0} history={realData.history} onHistoryChange={realData.setHistory} floodPeriod={realData.floodPeriod} onFloodPeriodChange={realData.setFloodPeriod}/>}
             <div className="map-tools">
               <button
                 aria-label="Centralizar mapa"
@@ -411,19 +412,44 @@ export default function App({real = false}) {
               </button>
             </div>
           </div>
-          {real ? <RealMapLegend showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0} showHistory={realData.history || !!realData.routes[realData.selected]?.floodContext?.history.events.length} showFlood={!!realData.floodPeriod} showRouteContext={Object.values(realData.routes[realData.selected]?.floodContext?.areas || {}).some(area=>area.segmentIndexes.length>0)}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
-          <div className="panel-inner">
+          <button
+            type="button"
+            className="mobile-sheet-handle"
+            aria-label={sheetOpen ? "Recolher painel" : "Abrir painel"}
+            aria-expanded={sheetOpen}
+            aria-controls="panel-content"
+            onClick={() => {
+              if (sheetDragged.current) { sheetDragged.current = false; return; }
+              setSheetOpen(open => !open);
+            }}
+            onTouchStart={event => { sheetTouchStart.current = event.touches[0].clientY; sheetDragged.current = false; }}
+            onTouchEnd={event => {
+              if (sheetTouchStart.current === null) return;
+              const delta = event.changedTouches[0].clientY - sheetTouchStart.current;
+              sheetTouchStart.current = null;
+              if (Math.abs(delta) > 40) {
+                sheetDragged.current = true;
+                setSheetOpen(delta < 0);
+                setTimeout(() => { sheetDragged.current = false; }, 500);
+              }
+            }}
+            onTouchCancel={() => { sheetTouchStart.current = null; sheetDragged.current = false; }}
+          ><span aria-hidden="true" /></button>
+          <div className="panel-inner" id="panel-content">
             <ExtraScreens
+              real={real}
+              savedRoutesError={real ? realSavedError : ''}
+              onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);go('home');}}
               view={view}
               go={go}
               selected={selected}
               setSelected={setSelected}
-              origin={origin}
-              destination={destination}
-              savedRoutes={savedRoutes}
-              setSavedRoutes={setSavedRoutes}
+              origin={real ? realData.origin : origin}
+              destination={real ? realData.destination : destination}
+              savedRoutes={real ? realSavedRoutes : savedRoutes}
+              setSavedRoutes={real ? setRealSavedRoutes : setSavedRoutes}
               resetSavedRoutes={resetSavedRoutes}
               reports={reports}
               setReports={setReports}
@@ -442,7 +468,7 @@ export default function App({real = false}) {
               showAlert={showAlert}
               setShowAlert={setShowAlert}
             />
-            {view === "city" && <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={event => { setCitySelection({event}); mapSurfaceRef.current?.scrollIntoView({block: 'center'}); }} onBack={() => go("home")} />}
+            {view === "city" && <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={event => { setCitySelection({event}); if (window.matchMedia?.('(max-width: 800px)').matches) setSheetOpen(false); else mapSurfaceRef.current?.scrollIntoView({block: 'center'}); }} onBack={() => go("home")} />}
             {view === "home" && (
               <>
                 <div className="eyebrow">
@@ -503,8 +529,7 @@ export default function App({real = false}) {
                   ⇅ Trocar origem e destino
                 </button>
                 <p className="footnote">
-                  Cenário disponível: Minha localização ↔ Hospital das
-                  Clínicas.
+                  Cenário disponível: {places[0]} ↔ {places[1]}.
                 </p>
                 <label className="form-field">
                   Condição dos dados (simulação)
@@ -566,8 +591,8 @@ export default function App({real = false}) {
                       <ShieldAlert size={21} />
                     </span>
                     <span>
-                      <strong>Alagamento na rota de volta {real && "(simulação)"}</strong>
-                      <small>Pinheiros · há 6 min</small>
+                      <strong>{scenarioAlert.title} {real && "(simulação)"}</strong>
+                      <small>{occurrences[0].shortLocation} · {occurrences[0].time}</small>
                     </span>
                     <ChevronRight size={19} />
                   </button>
@@ -588,12 +613,12 @@ export default function App({real = false}) {
                 <div className="notice">
                   <Info size={17} />
                   <span>
-                    {real ? "Alertas, relatos e rotas frequentes são simulados. As rotas e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
+                    {real ? "Alertas e relatos são simulados. As rotas e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
                   </span>
                 </div>
               </>
             )}
-            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")}/>}
+            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")} onSave={()=>go("save")}/>}
             {view === "compare" && !real && (
               <>
                 <button className="back" onClick={() => go("home")}>
@@ -611,7 +636,7 @@ export default function App({real = false}) {
                   </div>
                 )}
                 <p className="comparison-hint">
-                  A rota recomendada leva 6 minutos a mais e evita riscos
+                  A rota recomendada leva {routes.safe.minutes - routes.fast.minutes} minutos a mais e evita riscos
                   identificados na alternativa mais rápida.
                 </p>
                 <div
@@ -634,10 +659,10 @@ export default function App({real = false}) {
                         <span className="recommended">✓ Recomendada</span>
                       </span>
                       <span className="route-stats">
-                        <strong>24 min</strong>
-                        <span>6 min a mais</span>
+                        <strong>{routes.safe.minutes} min</strong>
+                        <span>{routes.safe.minutes - routes.fast.minutes} min a mais</span>
                       </span>
-                      <small>Evita 1 área R3 e 1 alagamento recente.</small>
+                      <small>{routes.safe.summary}</small>
                     </span>
                   </button>
                   <button
@@ -655,11 +680,11 @@ export default function App({real = false}) {
                         <span className="risk-badge">⚠ Maior exposição</span>
                       </span>
                       <span className="route-stats">
-                        <strong>18 min</strong>
-                        <span>6 min a menos</span>
+                        <strong>{routes.fast.minutes} min</strong>
+                        <span>{routes.safe.minutes - routes.fast.minutes} min a menos</span>
                       </span>
                       <small>
-                        Atenção: cruza uma área R3 e um alagamento reportado.
+                        {routes.fast.summary}
                       </small>
                     </span>
                   </button>
@@ -681,7 +706,7 @@ export default function App({real = false}) {
                     <Info size={19} />
                   </span>
                   <span>
-                    <strong>Por que recomendamos a rota de 24 min?</strong>
+                    <strong>Por que recomendamos a rota de {routes.safe.minutes} min?</strong>
                     <small>Entenda os fatores considerados</small>
                   </span>
                   <ChevronRight size={19} />
@@ -726,7 +751,7 @@ export default function App({real = false}) {
                   <div>
                     <small>Menor exposição conhecida</small>
                     <strong>
-                      24 min <span>· 6 min a mais</span>
+                      {routes.safe.minutes} min <span>· {routes.safe.minutes - routes.fast.minutes} min a mais</span>
                     </strong>
                   </div>
                 </div>
@@ -748,8 +773,9 @@ export default function App({real = false}) {
                           <small>{factor.description}</small>
                           {expanded === i && (
                             <em>
-                              {factor.source}. Os valores deste protótipo são
-                              ilustrativos.
+                              <span>{factor.source}</span>
+                              <span>{factor.period}</span>
+                              <span>{factor.relation}</span>
                             </em>
                           )}
                         </span>
@@ -779,9 +805,9 @@ export default function App({real = false}) {
                   <ArrowLeft size={18} /> Voltar aos alertas
                 </button>
                 <span className="severity">
-                  Atenção alta · há 6 min · expira em 30 min
+                  Atenção {occurrences[0].severity.toLowerCase()} · {occurrences[0].time} · {occurrences[0].validity}
                 </span>
-                <h1>Alagamento na sua rota de volta</h1>
+                <h1>{scenarioAlert.detailTitle}</h1>
                 <p className="intro">
                   A alternativa mais rápida do cenário passa pelo trecho
                   afetado.
@@ -790,27 +816,26 @@ export default function App({real = false}) {
                   <div>
                     <MapPin size={20} />
                     <span>
-                      <strong>Pinheiros · trecho ilustrativo</strong>
+                      <strong>{occurrences[0].location}</strong>
                       <small>Cenário fictício</small>
                     </span>
                   </div>
                   <div>
                     <ShieldAlert size={20} />
                     <span>
-                      <strong>Via reportada como intransitável</strong>
-                      <small>Segundo 3 relatos demonstrativos</small>
+                      <strong>{occurrences[0].description}</strong>
+                      <small>Segundo {occurrences[0].reportCount} relatos demonstrativos</small>
                     </span>
                   </div>
                 </div>
                 <div className="alternative">
                   <strong>Uma alternativa está disponível</strong>
                   <p>
-                    6 minutos a mais, evitando o trecho afetado e uma área R3.
+                    {routes.safe.minutes - routes.fast.minutes} minutos a mais, evitando o trecho afetado e uma área R3.
                   </p>
                 </div>
                 <div className="source">
-                  <Clock3 size={15} /> Relatos e chuva SIBH · dados
-                  demonstrativos
+                  <Clock3 size={15} /> {scenarioAlert.source}
                 </div>
                 {!comparisonAvailable && (
                   <div className="selection-warning" role="alert">
@@ -838,6 +863,7 @@ export default function App({real = false}) {
               </>
             )}
           </div>
+          {real ? <RealMapLegend showRain={realData.rain} showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0} showHistory={realData.history || !!realData.routes[realData.selected]?.floodContext?.history.events.length} showFlood={!!realData.floodPeriod} showRouteContext={Object.values(realData.routes[realData.selected]?.floodContext?.areas || {}).some(area=>area.segmentIndexes.length>0)}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
           <footer>
             Feito para decisões mais informadas <span>·</span> São Paulo, SP
           </footer>

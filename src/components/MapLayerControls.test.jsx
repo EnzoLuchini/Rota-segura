@@ -4,6 +4,16 @@ import userEvent from '@testing-library/user-event';
 import {expect,it} from 'vitest';
 import MapLayerControls from './MapLayerControls';
 
+it('permite ativar chuva observada e explica seus limites',async()=>{
+  const user=userEvent.setup();
+  function Example(){const [rain,setRain]=useState(false);return <><MapLayerControls rain={rain} onRainChange={setRain}/><output>{String(rain)}</output></>;}
+  render(<Example/>);
+  await user.click(screen.getByText('Camadas do mapa'));
+  await user.click(screen.getByRole('checkbox',{name:/chuva observada/i}));
+  expect(screen.getByText('true')).toBeInTheDocument();
+  expect(screen.getByText(/não indica alagamento/i)).toBeInTheDocument();
+});
+
 it('fecha o menu com Escape e devolve o foco ao controle',async()=>{
   const user=userEvent.setup();
   render(<MapLayerControls/>);

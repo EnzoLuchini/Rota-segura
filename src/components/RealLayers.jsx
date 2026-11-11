@@ -1,6 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {GeoJSON, ImageOverlay, Polyline, Circle, Marker, Popup, useMap, useMapEvents} from 'react-leaflet';
-import {historyIcon,historyLabel,historyGroupIcon,groupHistoryFeatures,HistoryCard} from './realMapPresentation';
+import {historyIcon,historyLabel,historyGroupIcon,groupHistoryFeatures,mergeHistoryFeatures,HistoryCard} from './realMapPresentation';
 import {createMapRequestCache} from './mapRequestCache';
 import {bufferBox, findCoverage} from './mapViewportCache';
 
@@ -43,7 +43,7 @@ export function FitRoutes({routes}) {
   return null;
 }
 
-export function HistoricalOccurrences({enabled,excludeIds=[]}) {
+export function HistoricalOccurrences({enabled,routeEvents=[]}) {
   const [data,setData]=useState(null), [status,setStatus]=useState('');
   const [zoom,setZoom]=useState(null);
   const [reference,setReference]=useState(null);
@@ -51,8 +51,9 @@ export function HistoricalOccurrences({enabled,excludeIds=[]}) {
   const coverage=useRef([]);
   const map=useMapEvents({moveend:load});
   function load() {
-    if (!enabled || !map) return;
+    if (!map) return;
     setZoom(map.getZoom());
+    if (!enabled) return;
     const id=++sequence.current, b=map.getBounds();
     const box=roundedBounds(b);
     if(box[2]-box[0]>0.3 || box[3]-box[1]>0.3 || box[2]<=box[0] || box[3]<=box[1]) {setData(null);setStatus('Aproxime o mapa de São Paulo para ver os registros históricos.');return;}
@@ -64,12 +65,14 @@ export function HistoricalOccurrences({enabled,excludeIds=[]}) {
   }
   useEffect(()=>{if(map && enabled)load();else {sequence.current++;setData(null);setStatus('');setReference(null);}return()=>{sequence.current++;};},[map,enabled]);
   useEffect(()=>{const node=document.getElementById('history-status');if(node)node.textContent=status;},[status]);
-  if(!enabled || !data?.features?.length)return null;
-  const groups=groupHistoryFeatures(data.features.filter(feature=>!excludeIds.includes(feature.id)),([lon,lat])=>map.project([lat,lon],zoom ?? map.getZoom()));
+  if(!map)return null;
+  const features=mergeHistoryFeatures(enabled ? (data?.features || []) : [],routeEvents);
+  if(!features.length)return null;
+  const groups=groupHistoryFeatures(features,([lon,lat])=>map.project([lat,lon],zoom ?? map.getZoom()));
   return <>{reference && <HistoryReference coordinates={reference}/>}{groups.map(group=>{
-    if(group.features.length===1){const feature=group.features[0],p=feature.properties || {};return <Marker key={feature.id} position={group.position} icon={historyIcon(p.dc_tipo_ocorrencia)} title={historyLabel(p.dc_tipo_ocorrencia)} alt={historyLabel(p.dc_tipo_ocorrencia)} eventHandlers={{popupopen:()=>setReference(feature.geometry.coordinates),popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><HistoryCard type={p.dc_tipo_ocorrencia} date={p.dt_ocorrencia} loadedAt={p.dt_carga} location={p.nm_subprefeitura}/></Popup></Marker>;}
+    if(group.features.length===1){const feature=group.features[0],p=feature.properties || {};return <Marker key={feature.id} position={group.position} icon={historyIcon(p.dc_tipo_ocorrencia)} title={historyLabel(p.dc_tipo_ocorrencia)} alt={historyLabel(p.dc_tipo_ocorrencia)} eventHandlers={{popupopen:()=>setReference(feature.geometry.coordinates),popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><HistoryCard type={p.dc_tipo_ocorrencia} date={p.dt_ocorrencia} loadedAt={p.dt_carga} location={p.nm_subprefeitura} distanceMeters={p.distanceMeters}/></Popup></Marker>;}
     const label=`${group.features.length} registros históricos próximos`;
-    return <Marker key={group.key} position={group.position} icon={historyGroupIcon(group.features.length)} title={label} alt={label} ref={layer=>layer?.getElement()?.setAttribute('aria-label',label)} eventHandlers={{popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><div className="real-history-group"><div className="real-history-group__heading"><strong>{label}</strong><span>Registros anteriores, não ocorrências atuais. Aproxime o mapa para ver pontos individuais.</span></div><div className="real-history-group__list">{group.features.map(feature=>{const p=feature.properties || {};return <HistoryCard key={feature.id} type={p.dc_tipo_ocorrencia} date={p.dt_ocorrencia} loadedAt={p.dt_carga} location={p.nm_subprefeitura} onShowReference={()=>setReference(feature.geometry.coordinates)}/>;})}</div></div></Popup></Marker>;
+    return <Marker key={group.key} position={group.position} icon={historyGroupIcon(group.features.length)} title={label} alt={label} ref={layer=>layer?.getElement()?.setAttribute('aria-label',label)} eventHandlers={{popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><div className="real-history-group"><div className="real-history-group__heading"><strong>{label}</strong><span>Registros anteriores, não ocorrências atuais. Aproxime o mapa para ver pontos individuais.</span></div><div className="real-history-group__list">{group.features.map(feature=>{const p=feature.properties || {};return <HistoryCard key={feature.id} type={p.dc_tipo_ocorrencia} date={p.dt_ocorrencia} loadedAt={p.dt_carga} location={p.nm_subprefeitura} distanceMeters={p.distanceMeters} onShowReference={()=>setReference(feature.geometry.coordinates)}/>;})}</div></div></Popup></Marker>;
   })}</>;
 }
 
@@ -105,7 +108,7 @@ export function FloodAreas({period}) {
   return <ImageOverlay url={image.url} bounds={image.bounds} opacity={0.7} className="flood-wms-image" interactive={false} attribution="Manchas de inundação: GeoSampa / Prefeitura de São Paulo"/>;
 }
 
-export function RouteFloodHighlights({route}) {
+export function RouteFloodHighlights({route,showMarkers=true}) {
   const [reference,setReference]=useState(null);
   useEffect(()=>setReference(null),[route]);
   if(!route?.floodContext)return null;
@@ -114,6 +117,6 @@ export function RouteFloodHighlights({route}) {
   return <>
     {reference && <HistoryReference coordinates={reference}/>}
     {segments.map(i=><Polyline key={i} positions={coordinates.slice(i,i+2).map(([lon,lat])=>[lat,lon])} pathOptions={{color:'#8f3e9c',weight:7,dashArray:'7 6'}}><Popup>Trecho que cruza mancha de inundação potencial. Consulte os períodos no detalhe da rota.</Popup></Polyline>)}
-    {history.events.map((event,i)=><Marker key={`${event.id}-${i}`} position={[event.coordinates[1],event.coordinates[0]]} icon={historyIcon(event.type)} title={historyLabel(event.type)} alt={historyLabel(event.type)} eventHandlers={{popupopen:()=>setReference(event.coordinates),popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><HistoryCard type={event.type} date={event.date} loadedAt={event.loadedAt} distanceMeters={event.distanceMeters}/></Popup></Marker>)}
+    {showMarkers && history.events.map((event,i)=><Marker key={`${event.id}-${i}`} position={[event.coordinates[1],event.coordinates[0]]} icon={historyIcon(event.type)} title={historyLabel(event.type)} alt={historyLabel(event.type)} eventHandlers={{popupopen:()=>setReference(event.coordinates),popupclose:()=>setReference(null)}}><Popup className="real-history-popup" autoPanPaddingTopLeft={[20,115]} autoPanPaddingBottomRight={[20,110]}><HistoryCard type={event.type} date={event.date} loadedAt={event.loadedAt} distanceMeters={event.distanceMeters}/></Popup></Marker>)}
   </>;
 }

@@ -1,8 +1,8 @@
-import {occurrences} from './scenario';
+import {occurrences, reportLocation, historicalExample} from './scenario';
 
 export const cityEvents = {
   now: [
-    {...occurrences[0], title: 'Alagamento em Pinheiros', detail: 'Via reportada como intransitável · há 6 min (simulado)', source: 'Relatos de usuários · dados fictícios'},
+    {...occurrences[0], title: 'Alagamento em Pinheiros', detail: `${occurrences[0].description} · ${occurrences[0].time} (simulado)`, source: 'Relatos de usuários · dados fictícios'},
     {id: 'now-vila-mariana', kind: 'inundation', title: 'Inundação na Vila Mariana', position: [-23.59, -46.638], detail: 'Via parcialmente interditada · há 12 min (simulado)', source: 'Aviso demonstrativo · dados fictícios'},
     {id: 'now-lapa', title: 'Alagamento na Lapa', position: [-23.536, -46.697], detail: 'Água acumulada na via · há 18 min (simulado)', source: 'Relato comunitário demonstrativo · dados fictícios'},
     {id: 'now-mooca', kind: 'inundation', title: 'Inundação na Mooca', position: [-23.557, -46.605], detail: 'Trecho com trânsito interrompido · há 25 min (simulado)', source: 'Aviso demonstrativo · dados fictícios'},
@@ -11,7 +11,7 @@ export const cityEvents = {
     {id: 'now-closure', kind: 'closure', title: 'Via interditada na Bela Vista', position: [-23.565, -46.646], detail: 'Bloqueio preventivo por acúmulo de água · há 15 min (simulado)', source: 'Aviso demonstrativo · dados fictícios'},
   ],
   history: [
-    {id: 'history-pinheiros', title: 'Pinheiros · 2 registros', position: occurrences[0].position, detail: '2 registros de alagamento no período fictício de 2023 a 2025.', source: 'Histórico demonstrativo · dados fictícios'},
+    {id: 'history-pinheiros', title: `${reportLocation.shortLabel} · ${historicalExample.count} registros`, position: occurrences[0].position, detail: `${historicalExample.count} registros de alagamento no período fictício de ${historicalExample.period}.`, source: 'Histórico demonstrativo · dados fictícios'},
     {id: 'history-lapa', title: 'Lapa · 5 registros', position: [-23.536, -46.697], detail: '5 registros de alagamento no período fictício de 2022 a 2025.', source: 'Histórico demonstrativo · dados fictícios'},
     {id: 'history-centro', title: 'Centro · 4 registros', position: [-23.549, -46.637], detail: '4 registros de alagamento no período fictício de 2021 a 2025.', source: 'Histórico demonstrativo · dados fictícios'},
     {id: 'history-vila-mariana', kind: 'inundation', title: 'Vila Mariana · 3 registros', position: [-23.59, -46.638], detail: '3 registros de inundação no período fictício de 2022 a 2025.', source: 'Histórico demonstrativo · dados fictícios'},
@@ -27,7 +27,7 @@ export function getCityEvents(mode, reports = []) {
     kind: report.type === 'Árvore caída' ? 'tree' : report.type === 'Alagamento' ? 'flood' : 'report',
     title: `${report.type} · relato local`,
     position: [-23.569 - (i % 4) * 0.001, -46.689 - (i % 4) * 0.001],
-    detail: `Pinheiros · gravidade ${report.severity} · via transitável: ${report.passable}${report.description ? ` · ${report.description}` : ''}`,
+    detail: `${reportLocation.shortLabel} · gravidade ${report.severity} · via transitável: ${report.passable}${report.description ? ` · ${report.description}` : ''}`,
     source: 'Relato comunitário simulado · não é confirmação oficial · localização ilustrativa',
   }))];
 }

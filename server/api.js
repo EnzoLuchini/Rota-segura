@@ -3,6 +3,7 @@ import {booleanPointInPolygon, point} from '@turf/turf';
 import {cityBoundary, riskAreas, streams, historicalOccurrences, floodAreas, floodAreasAlongRoute, findPlaces, drivingRoutes} from './providers.js';
 import {analyzeRoutes, routeWithinCity} from './analysis.js';
 import {analyzeFloodContext} from './floodContext.js';
+import {createRainProvider} from './rain.js';
 
 function send(res, status, data) {
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
@@ -16,10 +17,14 @@ async function body(req) {
   for await (const chunk of req) { content += chunk; if (content.length > 4096) throw new Error('Pedido muito grande.'); }
   return JSON.parse(content);
 }
-export function createServer({key = process.env.HEIGIT_API_KEY || '', historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
+export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
   return http.createServer(async (req,res) => {
     const url = new URL(req.url,'http://localhost');
     try {
+      if (req.method==='GET' && url.pathname==='/api/rain') {
+        if (!rainEnabled) return send(res,503,{error:'Dados de chuva indisponíveis: integração experimental desativada.'});
+        return send(res,200,await loadRain());
+      }
       if (req.method === 'GET' && ['/api/streams','/api/occurrences','/api/flood-areas'].includes(url.pathname)) {
         const box = (url.searchParams.get('bbox') || '').split(',').map(Number);
         if (box.length !== 4 || !box.every(Number.isFinite) || box[0] < -46.95 || box[2] > -46.30 || box[1] < -24.1 || box[3] > -23.3 || box[2] <= box[0] || box[3] <= box[1] || box[2]-box[0] > 0.3 || box[3]-box[1] > 0.3) return send(res,400,{error:'Área do mapa inválida ou muito ampla.'});
@@ -46,7 +51,7 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', historical
         if (!key) return send(res,503,{error:'Configure a chave HEIGIT_API_KEY para consultar rotas.'});
         let input;
         try { input = await body(req); } catch { return send(res,400,{error:'Pedido inválido.'}); }
-        if (!validCoordinate(input.origin) || !validCoordinate(input.destination) || input.origin.join() === input.destination.join()) return send(res,400,{error:'Origem e destino inválidos.'});
+        if (!validCoordinate(input?.origin) || !validCoordinate(input?.destination) || input.origin.join() === input.destination.join()) return send(res,400,{error:'Origem e destino inválidos.'});
         const city = await loadCity();
         if (![input.origin,input.destination].every(c => booleanPointInPolygon(point(c),city))) return send(res,400,{error:'Origem e destino devem estar no município de São Paulo.'});
         const routes = await loadRoutes(input.origin,input.destination,key);
