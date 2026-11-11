@@ -3,7 +3,7 @@ import ExtraScreens from "./ExtraScreens";
 import MapContextBar from "./components/MapContextBar";
 import RealMapLegend from "./components/RealMapLegend";
 import MapLayerControls from "./components/MapLayerControls";
-import {Waterways, FitRoutes} from "./components/RealLayers";
+import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
 import Logo from "./components/Logo";
 import CityMapPanel from "./components/CityMapPanel";
@@ -275,7 +275,8 @@ export default function App({real = false}) {
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
               />
               <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}" />
-              {real && <><Waterways enabled={realData.water}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} excludeIds={(realData.routes[realData.selected]?.floodContext?.history.events || []).map(event=>event.id)}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {real && <><FloodAreas period={realData.floodPeriod}/><RouteFloodHighlights route={realData.routes[realData.selected]}/></>}
               {!real && view !== "city" && <>
               <Polygon
                 positions={zone}
@@ -370,7 +371,7 @@ export default function App({real = false}) {
                 />
               )}
             </MapContainer>
-            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Dados de chuva indisponíveis</span></div></div> : view !== "city" && <div className="map-top">
+            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Dados de chuva indisponíveis</span></div><div id="flood-status" role="status" className="map-layer-status"/></div> : view !== "city" && <div className="map-top">
               <div className="weather">
                 <CloudRain size={19} />
                 <span>
@@ -385,7 +386,7 @@ export default function App({real = false}) {
                 <span className="weather-time">simulação</span>
               </div>
             </div>}
-            {real && <MapLayerControls water={realData.water} onWaterChange={realData.setWater} risk={realData.risk} onRiskChange={realData.setRisk} riskAvailable={realData.riskAvailable} hasRoutes={realData.routes.length>0}/>}
+            {real && <MapLayerControls water={realData.water} onWaterChange={realData.setWater} risk={realData.risk} onRiskChange={realData.setRisk} riskAvailable={realData.riskAvailable} hasRoutes={realData.routes.length>0} history={realData.history} onHistoryChange={realData.setHistory} floodPeriod={realData.floodPeriod} onFloodPeriodChange={realData.setFloodPeriod}/>}
             <div className="map-tools">
               <button
                 aria-label="Centralizar mapa"
@@ -395,7 +396,7 @@ export default function App({real = false}) {
               </button>
             </div>
           </div>
-          {real ? <RealMapLegend showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
+          {real ? <RealMapLegend showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0} showHistory={realData.history || !!realData.routes[realData.selected]?.floodContext?.history.events.length} showFlood={!!realData.floodPeriod} showRouteContext={Object.values(realData.routes[realData.selected]?.floodContext?.areas || {}).some(area=>area.segmentIndexes.length>0)}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
           <div className="panel-inner">

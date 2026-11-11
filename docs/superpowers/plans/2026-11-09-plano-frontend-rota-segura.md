@@ -26,6 +26,10 @@
 
 **Atualização de 10/11/2026:** o cenário, os fatores e os trechos passaram a compartilhar identificadores estáveis; a persistência local foi isolada e a limpeza ganhou escopo explícito. A revisão cobriu 360 px e 1280 px, foco entre telas, menu móvel, alvos de toque, preferências de categoria/severidade, estados de carregamento e dados antigos, rota frequente persistida, alerta relacionado, relato e detalhes equivalentes do mapa acessíveis por teclado. A comparação agora bloqueia endereços fora do cenário e dados indisponíveis inclusive quando aberta por um alerta. Há 10 testes automatizados e o build passa. Permanecem como polimento a sincronização do controle temporário “Mostrar alerta de exemplo” com o contador global e a inversão visual dos trechos quando origem e destino são trocados. O backend continua fora do escopo.
 
+**Revisão posterior do mock:** o controle do alerta e o contador compartilham estado; a ordem e o destaque dos trechos acompanham a viagem invertida. Os avisos atuais fictícios e relatos locais também aparecem no mapa de rotas, além do mapa da cidade; a seleção de um item da lista permite localizá-lo no mapa. O cálculo da comparação continua limitado ao cenário fixo e não é recalculado pelos demais avisos ou relatos. Relatos locais são identificados como comunitários e suas posições são ilustrativas.
+
+Em navegador com armazenamento isolado foram conferidos comparação invertida, explicação, trechos, salvar/editar/pausar rota e persistência após recarga, contador da central, criação de relato e localização no mapa, além da persistência de preferência. A confirmação de exclusão foi verificada em teste automatizado isolado; ainda não foi exercitada no navegador. As revisões anteriores de responsividade não substituem uma nova matriz visual completa após as alterações do mapa.
+
 - [x] Repositório Git iniciado em `C:\projects\gsAgua`, sem commit inicial.
 - [x] Aplicação React/Vite criada e compilando.
 - [x] Mapa interativo com camada cartográfica, rotas, área de risco e ponto de ocorrência ilustrativos.

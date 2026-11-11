@@ -40,6 +40,40 @@ export async function streams(bbox) {
   const data = await wfs(geoBase, 'geoportal:drenagem', {bbox:`${bbox.join(',')},EPSG:4326`,maxFeatures:'3000'});
   return {type:'FeatureCollection', features:data.features, truncated:typeof data.totalFeatures !== 'number' || data.totalFeatures > data.features.length};
 }
+export async function historicalOccurrences(bbox, kind='alagamento') {
+  if (!['alagamento','inundacao'].includes(kind)) throw new Error('Tipo inválido.');
+  const data = await wfs(geoBase, `geoportal:risco_ocorrencia_${kind}`, {bbox:`${bbox.join(',')},EPSG:4326`,maxFeatures:'3000'});
+  if (data.features.some(f => f.geometry?.type !== 'Point' || !Array.isArray(f.geometry.coordinates))) throw new Error('Camada de ocorrências inválida.');
+  return {type:'FeatureCollection',features:data.features,truncated:typeof data.totalFeatures !== 'number' || data.totalFeatures > data.features.length};
+}
+export async function floodAreas(bbox,period) {
+  if (![5,25,100].includes(period)) throw new Error('Período inválido.');
+  const data = await wfs(geoBase, `geoportal:mancha_inundacao_${period}`, {bbox:`${bbox.join(',')},EPSG:4326`,maxFeatures:'1000'});
+  if (data.features.some(f=>!['Polygon','MultiPolygon'].includes(f.geometry?.type))) throw new Error('Camada de manchas inválida.');
+  return {type:'FeatureCollection',features:data.features,truncated:typeof data.totalFeatures !== 'number' || data.totalFeatures>data.features.length,period};
+}
+export async function floodAreasAlongRoute(coordinates,period) {
+  if (![5,25,100].includes(period) || !Array.isArray(coordinates) || coordinates.length<2 || coordinates.length>800 || coordinates.some(c=>!Array.isArray(c) || c.length!==2 || !c.every(Number.isFinite))) throw new Error('Geometria ou período inválidos.');
+  const chunks=[];
+  for(let start=0;start<coordinates.length-1;start+=79) chunks.push(coordinates.slice(start,start+80));
+  const results=[];
+  for(let i=0;i<chunks.length;i+=3) {
+    const batch=chunks.slice(i,i+3).map(chunk=>{
+      const line=chunk.map(c=>`${c[0]} ${c[1]}`).join(',');
+      return wfs(geoBase,`geoportal:mancha_inundacao_${period}`,{CQL_FILTER:`INTERSECTS(ge_poligono,SRID=4326;LINESTRING(${line}))`,maxFeatures:'1000'});
+    });
+    results.push(...await Promise.allSettled(batch));
+  }
+  const found=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
+  if(!found.length)throw new Error('Manchas indisponíveis.');
+  const features=new Map();
+  for(const data of found) for(const feature of data.features) {
+    if (!['Polygon','MultiPolygon'].includes(feature.geometry?.type) || !feature.id) throw new Error('Camada de manchas inválida.');
+    features.set(feature.id,feature);
+  }
+  const all=[...features.values()];
+  return {features:all.slice(0,3000),truncated:results.length!==found.length || all.length>3000 || found.some(data=>typeof data.totalFeatures!=='number' || data.totalFeatures>data.features.length)};
+}
 export async function findPlaces(query, city, key) {
   const url = new URL('https://api.heigit.org/pelias/v1/search');
   Object.entries({text:query,'boundary.rect.min_lon':'-46.85','boundary.rect.max_lon':'-46.35','boundary.rect.min_lat':'-24.05','boundary.rect.max_lat':'-23.35',size:'10'}).forEach(([k,v]) => url.searchParams.set(k,v));

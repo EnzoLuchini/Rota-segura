@@ -22,3 +22,9 @@ it('não anuncia camadas desligadas nem trajetos ainda não consultados', () => 
   expect(screen.queryByText('Rio ou córrego mapeado')).not.toBeInTheDocument();
   expect(screen.queryByText('Área de risco mapeada')).not.toBeInTheDocument();
 });
+
+it('distingue os dois tipos de registros históricos',()=>{
+  render(<RealMapLegend showHistory/>);
+  expect(screen.getByText('Alagamento histórico')).toBeInTheDocument();
+  expect(screen.getByText('Inundação histórica')).toBeInTheDocument();
+});
