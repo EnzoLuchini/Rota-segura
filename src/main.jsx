@@ -3,6 +3,7 @@ import ExtraScreens from "./ExtraScreens";
 import MapContextBar from "./components/MapContextBar";
 import RealMapLegend from "./components/RealMapLegend";
 import MapLayerControls from "./components/MapLayerControls";
+import MapResizeObserver from "./components/MapResizeObserver";
 import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
 import Logo from "./components/Logo";
@@ -101,7 +102,7 @@ function RecenterReal({signal, routes}) {
     const points=routes.flatMap(route=>route.geometry.coordinates.map(([lon,lat])=>[lat,lon]));
     map.invalidateSize({animate:false,pan:false});
     if(points.length) map.fitBounds(points,{padding:[35,35],animate:false});
-    else map.setView([-23.56,-46.65],12,{animate:false});
+    else map.setView([-23.56,-46.65],13,{animate:false});
   },[signal,map]);
   return null;
 }
@@ -264,17 +265,31 @@ export default function App({real = false}) {
           <div className="map-surface" ref={mapSurfaceRef}>
             <MapContainer
               center={real ? [-23.56, -46.65] : [-23.568, -46.683]}
-              zoom={real ? 12 : 14}
+              zoom={real ? 13 : 14}
               zoomControl={false}
               scrollWheelZoom={true}
             >
+              <MapResizeObserver/>
               {real ? <RecenterReal signal={centerSignal} routes={realData.routes}/> : <Recenter signal={centerSignal} view={view} />}
               <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
-              <TileLayer
-                attribution="Tiles &copy; Esri &mdash; Sources: Esri, OpenStreetMap contributors"
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-              />
-              <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}" />
+              {import.meta.env.DEV ? <>
+                <TileLayer
+                  attribution="Tiles &copy; Esri &mdash; Sources: Esri, OpenStreetMap contributors"
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                  maxNativeZoom={16}
+                  keepBuffer={2}
+                />
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                  maxNativeZoom={16}
+                  keepBuffer={2}
+                />
+              </> : <TileLayer
+                attribution='&copy; <a href="https://stadiamaps.com/attribution/" target="_blank">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+                url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png"
+                maxNativeZoom={20}
+                keepBuffer={2}
+              />}
               {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} excludeIds={(realData.routes[realData.selected]?.floodContext?.history.events || []).map(event=>event.id)}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
               {real && <><FloodAreas period={realData.floodPeriod}/><RouteFloodHighlights route={realData.routes[realData.selected]}/></>}
               {!real && view !== "city" && <>

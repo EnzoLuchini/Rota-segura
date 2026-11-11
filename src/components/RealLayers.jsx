@@ -2,6 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {GeoJSON, ImageOverlay, Polyline, Circle, Marker, Popup, useMap, useMapEvents} from 'react-leaflet';
 import {historyIcon,historyLabel,historyGroupIcon,groupHistoryFeatures,HistoryCard} from './realMapPresentation';
 import {createMapRequestCache} from './mapRequestCache';
+import {bufferBox, findCoverage} from './mapViewportCache';
 
 const mapCache=createMapRequestCache();
 const cachedMapRequest=url=>mapCache.get(url,()=>request(url));
@@ -17,6 +18,7 @@ export function Waterways({enabled}) {
   const [data,setData] = useState(null);
   const [status,setStatus] = useState('');
   const sequence = useRef(0);
+  const coverage = useRef([]);
   const map = useMapEvents({moveend:load});
   function load() {
     if (!enabled || !map) return;
@@ -24,8 +26,11 @@ export function Waterways({enabled}) {
     const b=map.getBounds();
     const box=roundedBounds(b);
     if(box[2]-box[0]>0.3 || box[3]-box[1]>0.3 || box[2]<=box[0] || box[3]<=box[1]) { setData(null); setStatus('Aproxime o mapa de São Paulo para ver rios e córregos.'); return; }
+    const cached=findCoverage(coverage.current,box,null,Date.now());
+    if(cached){setData(cached.data);setStatus('');return;}
+    const expanded=bufferBox(box);
     setStatus('Carregando rios e córregos…');
-    cachedMapRequest(`/api/streams?bbox=${box.join(',')}`).then(value => {if(id!==sequence.current)return;setData(value);setStatus(value.truncated ? 'Camada parcialmente exibida; aproxime o mapa.' : '');}).catch(() => {if(id!==sequence.current)return;setData(null);setStatus('Rios e córregos indisponíveis no momento.');});
+    cachedMapRequest(`/api/streams?bbox=${expanded.join(',')}`).then(value => {if(id!==sequence.current)return;if(!value.truncated)coverage.current=[{box:expanded,data:value,time:Date.now()},...coverage.current].slice(0,5);setData(value);setStatus(value.truncated ? 'Camada parcialmente exibida; aproxime o mapa.' : '');}).catch(() => {if(id!==sequence.current)return;setData(null);setStatus('Rios e córregos indisponíveis no momento.');});
   }
   useEffect(() => { if (map && enabled) load(); else {sequence.current++;setData(null);setStatus('');} return () => {sequence.current++;}; },[map,enabled]);
   useEffect(() => { const node=document.getElementById('water-status'); if(node) node.textContent=status; },[status]);
@@ -43,6 +48,7 @@ export function HistoricalOccurrences({enabled,excludeIds=[]}) {
   const [zoom,setZoom]=useState(null);
   const [reference,setReference]=useState(null);
   const sequence=useRef(0);
+  const coverage=useRef([]);
   const map=useMapEvents({moveend:load});
   function load() {
     if (!enabled || !map) return;
@@ -50,8 +56,11 @@ export function HistoricalOccurrences({enabled,excludeIds=[]}) {
     const id=++sequence.current, b=map.getBounds();
     const box=roundedBounds(b);
     if(box[2]-box[0]>0.3 || box[3]-box[1]>0.3 || box[2]<=box[0] || box[3]<=box[1]) {setData(null);setStatus('Aproxime o mapa de São Paulo para ver os registros históricos.');return;}
+    const cached=findCoverage(coverage.current,box,null,Date.now());
+    if(cached){setData(cached.data);setStatus(cached.data.features.length?'':'Nenhum registro disponível nesta área da camada.');return;}
+    const expanded=bufferBox(box);
     setStatus('Carregando registros históricos…');
-    Promise.allSettled(['alagamento','inundacao'].map(kind=>cachedMapRequest(`/api/occurrences?bbox=${box.join(',')}&kind=${kind}`))).then(results=>{if(id!==sequence.current)return;const available=results.filter(result=>result.status==='fulfilled').map(result=>result.value);if(!available.length){setData(null);setStatus('Registros históricos indisponíveis no momento.');return;}const features=available.flatMap(value=>value.features);setData({features});setStatus(available.length<2 || available.some(value=>value.truncated)?'Registros parcialmente exibidos; uma fonte falhou ou limitou os dados.':features.length?'':'Nenhum registro disponível nesta área da camada.');});
+    Promise.allSettled(['alagamento','inundacao'].map(kind=>cachedMapRequest(`/api/occurrences?bbox=${expanded.join(',')}&kind=${kind}`))).then(results=>{if(id!==sequence.current)return;const available=results.filter(result=>result.status==='fulfilled').map(result=>result.value);if(!available.length){setData(null);setStatus('Registros históricos indisponíveis no momento.');return;}const features=available.flatMap(value=>value.features),next={features};if(available.length===2 && !available.some(value=>value.truncated))coverage.current=[{box:expanded,data:next,time:Date.now()},...coverage.current].slice(0,5);setData(next);setStatus(available.length<2 || available.some(value=>value.truncated)?'Registros parcialmente exibidos; uma fonte falhou ou limitou os dados.':features.length?'':'Nenhum registro disponível nesta área da camada.');});
   }
   useEffect(()=>{if(map && enabled)load();else {sequence.current++;setData(null);setStatus('');setReference(null);}return()=>{sequence.current++;};},[map,enabled]);
   useEffect(()=>{const node=document.getElementById('history-status');if(node)node.textContent=status;},[status]);
@@ -71,17 +80,22 @@ function HistoryReference({coordinates}) {
 export function FloodAreas({period}) {
   const [status,setStatus]=useState(''),[image,setImage]=useState(null);
   const sequence=useRef(0);
+  const coverage=useRef([]);
   const map=useMapEvents({moveend:load});
   function load(){
     if(period!==5 || !map)return;
-    const id=++sequence.current,bounds=map.getBounds(), size=map.getSize();
+    const id=++sequence.current,viewport=map.getBounds(), size=map.getSize(),zoom=map.getZoom();
+    const visible=[viewport.getWest(),viewport.getSouth(),viewport.getEast(),viewport.getNorth()];
+    const cached=findCoverage(coverage.current,visible,zoom,Date.now());
+    if(cached){setImage(cached.image);setStatus(zoom<9?'Aproxime o mapa para visualizar o cenário de inundação.':'');return;}
+    const bounds=viewport.pad(0.5);
     const sw=map.options.crs.project(bounds.getSouthWest()),ne=map.options.crs.project(bounds.getNorthEast());
-    const scale=Math.min(1,2048/Math.max(size.x,size.y));
+    const scale=Math.min(2,2048/Math.max(size.x,size.y));
     const url=new URL('https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms');
     Object.entries({service:'WMS',version:'1.1.1',request:'GetMap',layers:'geoportal:mancha_inundacao_5',styles:'polygon',srs:'EPSG:3857',bbox:[sw.x,sw.y,ne.x,ne.y].join(','),width:Math.max(1,Math.round(size.x*scale)),height:Math.max(1,Math.round(size.y*scale)),format:'image/png',transparent:'true'}).forEach(([key,value])=>url.searchParams.set(key,value));
     setStatus('Atualizando manchas; a área exibida pode estar incompleta.');
     const pending=new Image();
-    pending.onload=()=>{if(id!==sequence.current)return;setImage({url:url.toString(),bounds});setStatus(map.getZoom && map.getZoom()<9?'Aproxime o mapa para visualizar o cenário de inundação.':'');};
+    pending.onload=()=>{if(id!==sequence.current)return;const next={url:url.toString(),bounds};coverage.current=[{box:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()],zoom,time:Date.now(),image:next},...coverage.current].slice(0,5);setImage(next);setStatus(zoom<9?'Aproxime o mapa para visualizar o cenário de inundação.':'');};
     pending.onerror=()=>{if(id!==sequence.current)return;setStatus('Manchas indisponíveis para a área atual. Tente novamente mais tarde.');};
     pending.src=url.toString();
   }

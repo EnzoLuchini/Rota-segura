@@ -4,6 +4,25 @@ import userEvent from '@testing-library/user-event';
 import {expect,it} from 'vitest';
 import MapLayerControls from './MapLayerControls';
 
+it('fecha o menu com Escape e devolve o foco ao controle',async()=>{
+  const user=userEvent.setup();
+  render(<MapLayerControls/>);
+  const trigger=screen.getByText('Camadas do mapa');
+  await user.click(trigger);
+  await user.keyboard('{Escape}');
+  expect(trigger.closest('details')).not.toHaveAttribute('open');
+  expect(trigger).toHaveFocus();
+});
+
+it('fecha o menu ao clicar fora dele',async()=>{
+  const user=userEvent.setup();
+  render(<><MapLayerControls/><button>Mapa</button></>);
+  const trigger=screen.getByText('Camadas do mapa');
+  await user.click(trigger);
+  await user.click(screen.getByRole('button',{name:'Mapa'}));
+  expect(trigger.closest('details')).not.toHaveAttribute('open');
+});
+
 it('permite mostrar e esconder cada camada independentemente',async()=>{
   const user=userEvent.setup();
   function Example(){const [water,setWater]=useState(true),[risk,setRisk]=useState(true);return <><MapLayerControls water={water} onWaterChange={setWater} risk={risk} onRiskChange={setRisk} riskAvailable/><output>{`${water}/${risk}`}</output></>;}

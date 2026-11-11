@@ -2,11 +2,12 @@ import React from 'react';
 import {render,screen,within} from '@testing-library/react';
 import {expect,it,vi} from 'vitest';
 import userEvent from '@testing-library/user-event';
-vi.mock('react-leaflet',()=>({MapContainer:({children})=><div>{children}</div>,TileLayer:()=>null,Polyline:()=>null,Polygon:()=>null,GeoJSON:()=> <div data-testid="areas-de-risco"/>,CircleMarker:({children})=><div>{children}</div>,Marker:()=>null,Popup:({children})=><div>{children}</div>,useMap:()=>({invalidateSize:()=>{},fitBounds:()=>{},setView:()=>{}}),useMapEvents:()=>null}));
+vi.mock('react-leaflet',()=>({MapContainer:({children})=><div>{children}</div>,TileLayer:({url})=><span data-testid="basemap-url">{url}</span>,Polyline:()=>null,Polygon:()=>null,GeoJSON:()=> <div data-testid="areas-de-risco"/>,CircleMarker:({children})=><div>{children}</div>,Marker:()=>null,Popup:({children})=><div>{children}</div>,useMap:()=>({invalidateSize:()=>{},fitBounds:()=>{},setView:()=>{}}),useMapEvents:()=>null}));
 import App from '../main';
 
 it('apresenta a consulta real no próprio fluxo visual do mock sem cenário fictício',()=>{
   render(<App real/>);
+  expect(screen.getAllByTestId('basemap-url').map(item=>item.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('World_Light_Gray_Base'),expect.stringContaining('World_Light_Gray_Reference')]));
   expect(screen.getByRole('heading',{name:/um caminho melhor começa com informação/i})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:/explorar situação da cidade/i})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:/comparar rotas/i})).toBeDisabled();
@@ -23,10 +24,8 @@ it('usa a busca real na tela do mock e preserva a comparação e o retorno',asyn
   try {
     render(<App real/>);
     await user.type(screen.getByLabelText('Origem'),'Origem');
-    await user.click(screen.getAllByRole('button',{name:'Buscar'})[0]);
     await user.click(await screen.findByRole('button',{name:'Origem escolhida'}));
     await user.type(screen.getByLabelText('Destino'),'Destino');
-    await user.click(screen.getAllByRole('button',{name:'Buscar'})[1]);
     await user.click(await screen.findByRole('button',{name:'Destino escolhido'}));
     await user.click(screen.getByRole('button',{name:'Comparar rotas'}));
     expect(await screen.findByRole('heading',{name:'Compare suas rotas'})).toBeInTheDocument();
@@ -40,6 +39,9 @@ it('usa a busca real na tela do mock e preserva a comparação e o retorno',asyn
     expect(screen.queryByTestId('areas-de-risco')).not.toBeInTheDocument();
     expect(screen.queryByText('Área de risco mapeada')).not.toBeInTheDocument();
     expect(screen.getByText('0 m do trajeto em áreas mapeadas')).toBeInTheDocument();
+    expect(screen.queryByText('Rio ou córrego mapeado')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox',{name:'Rios e córregos'}));
+    expect(screen.getByText('Rio ou córrego mapeado')).toBeInTheDocument();
     await user.click(screen.getByRole('checkbox',{name:'Rios e córregos'}));
     expect(screen.queryByText('Rio ou córrego mapeado')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:/voltar ao início/i}));

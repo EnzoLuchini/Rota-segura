@@ -4,6 +4,12 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {useRealRoutes} from './RealRoutes';
 
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
+it('inicia com áreas de risco e registros históricos selecionados',()=>{
+  const {result}=renderHook(()=>useRealRoutes());
+  expect(result.current.risk).toBe(true);
+  expect(result.current.history).toBe(true);
+  expect(result.current.water).toBe(false);
+});
 it('reutiliza uma rota completa por até dois minutos e informa o usuário',async()=>{
   let now=100000;
   vi.spyOn(Date,'now').mockImplementation(()=>now);

@@ -7,9 +7,9 @@ export function useRealRoutes() {
   const [origin,setOrigin] = useState(null), [destination,setDestination] = useState(null);
   const [routes,setRoutes] = useState([]), [areas,setAreas] = useState([]), [selected,setSelected] = useState(0);
   const [riskAvailable,setRiskAvailable] = useState(false), [message,setMessage] = useState(''), [busy,setBusy] = useState(false);
-  const [water,setWater] = useState(true);
+  const [water,setWater] = useState(false);
   const [risk,setRisk] = useState(true);
-  const [history,setHistory] = useState(false);
+  const [history,setHistory] = useState(true);
   const [floodPeriod,setFloodPeriod] = useState(0);
   const routeCache=useRef(new Map()), requestSequence=useRef(0);
   const clear = () => {requestSequence.current++;setBusy(false);setRoutes([]);setAreas([]);setMessage('');};
@@ -36,9 +36,22 @@ export function useRealRoutes() {
 
 function LocationInput({label,place,onChange}) {
   const [text,setText]=useState(place?.label || ''), [items,setItems]=useState([]), [error,setError]=useState(''), [loading,setLoading]=useState(false);
+  const sequence=useRef(0);
   React.useEffect(()=>{if(place) setText(place.label);},[place]);
-  async function search(){setLoading(true);setError('');setItems([]);try {const data=await request(`/api/places?q=${encodeURIComponent(text)}`);setItems(data.places);if(!data.places.length)setError('Nenhum local encontrado em São Paulo.');}catch(e){setError(e.message);}finally{setLoading(false);}}
-  return <><div className="input-row real-input-row">{label==='Origem'?<span className="point start"/>:<MapPin size={19} className="dest-icon"/>}<label><small>{label}</small><input aria-label={label} value={text} placeholder="Digite um endereço" onChange={e=>{setText(e.target.value);onChange(null);setItems([]);}}/></label><button className="real-search-button" type="button" onClick={search} disabled={loading}>{loading?'Buscando…':'Buscar'}</button></div>{error && <p role="status" className="real-input-error">{error}</p>}{items.length>0 && <ul className="real-place-results">{items.map((item,i)=><li key={i}><button type="button" onClick={()=>{setText(item.label);onChange(item);setItems([]);}}>{item.label}</button></li>)}</ul>}</>;
+  useEffect(()=>{
+    const id=++sequence.current;
+    const query=text.trim();
+    if(query.length<3 || place?.label===text){setLoading(false);return;}
+    const controller=new AbortController();
+    const timer=setTimeout(async()=>{
+      setLoading(true);
+      try{const data=await request(`/api/places?q=${encodeURIComponent(query)}`,{signal:controller.signal});if(id!==sequence.current)return;setItems(data.places);setError(data.places.length?'':'Nenhum local encontrado em São Paulo.');}
+      catch(error){if(id===sequence.current && error.name!=='AbortError')setError(error.message);}
+      finally{if(id===sequence.current)setLoading(false);}
+    },350);
+    return()=>{clearTimeout(timer);controller.abort();};
+  },[text,place]);
+  return <><div className="input-row real-input-row">{label==='Origem'?<span className="point start"/>:<MapPin size={19} className="dest-icon"/>}<label><small>{label}</small><input aria-label={label} value={text} placeholder="Digite um endereço" autoComplete="off" onChange={e=>{sequence.current++;setText(e.target.value);onChange(null);setItems([]);setError('');setLoading(false);}} onKeyDown={e=>{if(e.key==='Enter' && items.length){e.preventDefault();setText(items[0].label);onChange(items[0]);setItems([]);}if(e.key==='Escape')setItems([]);}}/></label>{loading && <span className="real-search-progress" role="status">Buscando…</span>}</div>{error && <p role="status" className="real-input-error">{error}</p>}{items.length>0 && <ul className="real-place-results">{items.map((item,i)=><li key={i}><button type="button" onClick={()=>{setText(item.label);onChange(item);setItems([]);}}>{item.label}</button></li>)}</ul>}</>;
 }
 
 export function RealSearch({data,onCompare}) {
@@ -66,10 +79,11 @@ export function RealSearch({data,onCompare}) {
       setLocationError(error.code===1?'A permissão de localização foi negada. Informe um endereço ou altere a permissão do navegador.':error.code===3?'Não foi possível obter a localização a tempo. Tente novamente ou informe um endereço.':'Localização indisponível no momento. Tente novamente ou informe um endereço.');
     },{enableHighAccuracy:false,timeout:15000,maximumAge:0});
   }
-  return <><div className="search-box"><LocationInput label="Origem" place={data.origin} onChange={v=>{cancelLocation();data.setOrigin(v);data.clear();}}/><div className="input-divider"/><LocationInput label="Destino" place={data.destination} onChange={v=>{data.setDestination(v);data.clear();}}/></div>
-    <button className="real-location-button" type="button" onClick={locate} disabled={locating}><LocateFixed size={16}/>{locating?'Obtendo localização…':'Usar minha localização atual'}</button>
-    <p className="real-location-note">A localização será usada como origem e enviada ao provedor ao comparar rotas.</p>
-    {locationError && <p className="real-input-error" role="status">{locationError}</p>}
+  return <><div className="search-box"><LocationInput label="Origem" place={data.origin} onChange={v=>{cancelLocation();data.setOrigin(v);data.clear();}}/>
+    <div className="real-origin-location"><button className="real-location-button" type="button" onClick={locate} disabled={locating}><LocateFixed size={16}/>{locating?'Obtendo localização…':'Usar minha localização atual'}</button>
+    <p className="real-location-note">Usada como origem e enviada ao provedor ao comparar rotas.</p>
+    {locationError && <p className="real-input-error" role="status">{locationError}</p>}</div>
+    <div className="input-divider"/><LocationInput label="Destino" place={data.destination} onChange={v=>{data.setDestination(v);data.clear();}}/></div>
     <button className="swap-trip" type="button" aria-label="Trocar origem e destino" onClick={()=>{cancelLocation();data.setOrigin(data.destination);data.setDestination(data.origin);data.clear();}}>⇅ Trocar origem e destino</button>
     {data.message && <div className="selection-warning" role="status">{data.message}</div>}
     <button className="primary" disabled={!data.origin || !data.destination || data.busy || locating} onClick={()=>data.compare(onCompare)}><Search size={18}/>{data.busy?'Consultando rotas…':'Comparar rotas'}</button>

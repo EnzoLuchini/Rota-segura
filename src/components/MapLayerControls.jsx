@@ -1,8 +1,16 @@
-import React from 'react';
+import React, {useEffect, useRef} from 'react';
 import {Layers} from 'lucide-react';
 
 export default function MapLayerControls({water,onWaterChange,risk,onRiskChange,riskAvailable,hasRoutes=false,history=false,onHistoryChange,floodPeriod=0,onFloodPeriodChange}) {
-  return <details className="map-layer-controls">
+  const control=useRef(null);
+  useEffect(()=>{
+    function closeOutside(event){if(control.current?.open && !control.current.contains(event.target))control.current.open=false;}
+    function closeOnEscape(event){if(event.key==='Escape' && control.current?.open){control.current.open=false;control.current.querySelector('summary')?.focus();}}
+    document.addEventListener('pointerdown',closeOutside);
+    document.addEventListener('keydown',closeOnEscape);
+    return ()=>{document.removeEventListener('pointerdown',closeOutside);document.removeEventListener('keydown',closeOnEscape);};
+  },[]);
+  return <details className="map-layer-controls" ref={control}>
     <summary><Layers size={17} aria-hidden="true"/> Camadas do mapa</summary>
     <div className="map-layer-menu">
       <label><input type="checkbox" checked={water} onChange={event=>onWaterChange(event.target.checked)}/> Rios e córregos</label>

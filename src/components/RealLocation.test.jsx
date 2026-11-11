@@ -7,6 +7,28 @@ import {RealSearch,useRealRoutes} from './RealRoutes';
 function Example(){const data=useRealRoutes();return <><RealSearch data={data} onCompare={()=>{}}/><output>{JSON.stringify(data.origin)}</output></>;}
 afterEach(()=>{vi.unstubAllGlobals();delete navigator.geolocation;});
 
+it('mostra a localização como alternativa dentro da seção de origem',()=>{
+  render(<Example/>);
+  const search=screen.getByLabelText('Origem').closest('.search-box');
+  const location=screen.getByRole('button',{name:/usar minha localização atual/i});
+  expect(search).toContainElement(location);
+  expect(search).toContainElement(screen.getByText(/usada como origem e enviada ao provedor/i));
+  expect(location.compareDocumentPosition(screen.getByLabelText('Destino')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('sugere endereços após digitar e descarta uma resposta antiga',async()=>{
+  let finishOld;
+  vi.stubGlobal('fetch',vi.fn(url=>url.includes('Paul')?new Promise(resolve=>{finishOld=resolve;}):Promise.resolve({ok:true,json:async()=>({places:[{label:'Avenida Paulista',coordinates:[-46.65,-23.56]}]})})));
+  const user=userEvent.setup();render(<Example/>);
+  await user.type(screen.getByLabelText('Origem'),'Paul');
+  await waitFor(()=>expect(finishOld).toBeTypeOf('function'));
+  await user.clear(screen.getByLabelText('Origem'));
+  await user.type(screen.getByLabelText('Origem'),'Centro');
+  finishOld({ok:true,json:async()=>({places:[{label:'Resposta antiga',coordinates:[-46.6,-23.5]}]})});
+  expect(screen.queryByRole('button',{name:'Resposta antiga'})).not.toBeInTheDocument();
+  expect(await screen.findByRole('button',{name:'Avenida Paulista'})).toBeInTheDocument();
+});
+
 it('usa uma leitura autorizada como origem após validar o município',async()=>{
   const getCurrentPosition=vi.fn(success=>success({coords:{latitude:-23.55,longitude:-46.63}}));
   Object.defineProperty(navigator,'geolocation',{configurable:true,value:{getCurrentPosition}});
