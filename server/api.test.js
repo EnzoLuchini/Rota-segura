@@ -2,6 +2,65 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from './api.js';
 
+test('a central distingue avisos consultados de fonte indisponível',async()=>{
+  for(const [alerts,status] of [[async()=>({status:'partial',coverage:'unknown',checkedAt:'2026-11-11T18:30:00Z',alerts:[]}),200],[async()=>{throw Error('offline');},502]]){
+    const server=createServer({alerts});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try{const response=await fetch(`http://127.0.0.1:${server.address().port}/api/alerts`);const data=await response.json();assert.equal(response.status,status);if(status===200){assert.equal(data.status,'partial');assert.equal(data.coverage,'unknown');}else assert.ok(data.error);}
+    finally{server.close();}
+  }
+});
+
+test('a API explica quando a fonte de risco está indisponível ou há somente uma rota',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  const route={type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,-23.5],[-46.69,-23.5]]}};
+  const dataset={type:'FeatureCollection',features:[],truncated:false};
+  for(const [riskAreas,reason,status] of [[async()=>{throw Error();},'risk_unavailable','unavailable'],[async()=>[],'single_route','available']]) {
+    const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas,drivingRoutes:async()=>[route],historicalOccurrences:async()=>dataset,floodAreasAlongRoute:async()=>dataset});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try {
+      const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
+      const data=await response.json();
+      assert.equal(response.status,200);
+      assert.equal(data.recommendationReason,reason);
+      assert.equal(data.sources.risk.status,status);
+      assert.equal(data.routes[0].recommended,false);
+    } finally {server.close();}
+  }
+});
+
+test('a API informa ausência de recomendação quando as alternativas têm mesma exposição',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  const route=(lat)=>({type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,lat],[-46.69,lat]]}});
+  const dataset={type:'FeatureCollection',features:[],truncated:false};
+  const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[],drivingRoutes:async()=>[route(-23.5),route(-23.51)],historicalOccurrences:async()=>dataset,floodAreasAlongRoute:async()=>dataset});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try {
+    const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
+    const data=await response.json();
+    assert.equal(data.recommendationReason,'no_observed_difference');
+    assert.ok(data.routes.every(route=>!route.recommended));
+  } finally {server.close();}
+});
+
+test('a API distingue menor exposição isolada, empate e ausência de trajetos',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  const area={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.7,-23.515],[-46.69,-23.515],[-46.69,-23.505],[-46.7,-23.505],[-46.7,-23.515]]]}};
+  const route=lat=>({type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,lat],[-46.69,lat]]}});
+  const dataset={type:'FeatureCollection',features:[],truncated:false};
+  for(const [routes,reason,recommended,status] of [[[route(-23.5),route(-23.51)],'lowest_exposure',[true,false],'available'],[[route(-23.5),route(-23.5),route(-23.51)],'lowest_exposure_tie',[false,false,false],'available'],[[],'no_routes',[],'not_queried']]){
+    const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[area],drivingRoutes:async()=>routes,historicalOccurrences:async()=>dataset,floodAreasAlongRoute:async()=>dataset});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try{
+      const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
+      const data=await response.json();
+      assert.equal(data.recommendationReason,reason);
+      assert.equal(data.sources.risk.status,status);
+      if(reason==='no_routes') assert.deepEqual(data.sources.history,{alagamento:'not_queried',inundacao:'not_queried'});
+      assert.deepEqual(data.routes.map(r=>r.recommended),recommended);
+    }finally{server.close();}
+  }
+});
+
 test('chuva é consultada por padrão sem exigir configuração', async () => {
   const server=createServer({rain:async()=>({stations:[],queriedAt:'2026-11-11T18:30:00Z'})});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -85,7 +144,7 @@ test('rotas recebem contexto histórico mesmo com falha de uma camada, sem alter
   const route={type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,-23.5],[-46.69,-23.5]]}};
   const dataset={type:'FeatureCollection',features:[],truncated:false};
   const periods=[];
-  const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[],drivingRoutes:async()=>[route],historicalOccurrences:async (_box,kind)=>{if(kind==='inundacao')throw Error();return dataset;},floodAreasAlongRoute:async (_coordinates,period)=>{periods.push(period);return dataset;}});
+  const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[],drivingRoutes:async()=>[route],historicalOccurrences:async (_box,kind)=>{if(kind==='inundacao')throw Error();return {...dataset,truncated:true};},floodAreasAlongRoute:async (_coordinates,period)=>{periods.push(period);return dataset;}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try {
     const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
@@ -93,6 +152,8 @@ test('rotas recebem contexto histórico mesmo com falha de uma camada, sem alter
     const result=await response.json();
     assert.equal(result.routes[0].recommended,false);
     assert.equal(result.routes[0].floodContext.history.status,'partial');
+    assert.equal(result.sources.history.alagamento,'partial');
+    assert.equal(result.sources.history.inundacao,'unavailable');
     assert.equal(result.routes[0].floodContext.areas[5].status,'available');
     assert.deepEqual(periods,[5]);
     assert.deepEqual(Object.keys(result.routes[0].floodContext.areas),['5']);

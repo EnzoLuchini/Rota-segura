@@ -321,6 +321,12 @@ A API local para consulta de rotas e fontes geográficas já existe. Os próximo
 
 **Prioridade definida em 11/11/2026:** implementar rotas frequentes reais antes dos relatos; deixar os relatos por último. Nesta etapa as rotas reais ficam no armazenamento local do navegador, sem login, conforme pedido do usuário; reutilizam o fluxo visual do mock e não são sincronizadas entre dispositivos. Alertas reais e eventual armazenamento no backend permanecem para definição posterior.
 
+**Evolução da API:** a comparação informa o motivo da recomendação ou de sua ausência e o estado separado das fontes de risco e dos dois tipos de histórico. O provedor de rotas valida geometria, distância e duração antes de entregar alternativas; detalhes do contrato estão em `docs/rotas-reais.md`. A metodologia de comparação permanece experimental.
+
+**Investigação de avisos oficiais em 11/11/2026:** o portal do INMET referencia um [RSS de avisos](https://apiprevmet3.inmet.gov.br/avisos/rss), que respondeu na consulta e incluía avisos futuros. Um dos links retornou um documento CAP com identificação, vigência e horário com fuso. O feed cita condições de reprodução e exceções; não se deve presumir que todas as mensagens estejam vigentes ou afetem o município. Permanecem pendentes a confirmação da completude do feed e de eventuais exceções de uso; interseção geográfica, vigência, atualizações e falhas recebem tratamento na integração. Um aviso meteorológico não equivale a alagamento confirmado na via. Entrega de notificações permanece indefinida.
+
+**Implementação de avisos dentro do app:** a central real consulta o RSS e os documentos CAP do INMET, filtra por vigência e interseção com o município e indica fontes incompletas. A completude do feed e as exceções de reprodução não foram confirmadas e permanecem explícitas; resultados vazios não indicam ausência de risco. Não há notificação automática nem associação de avisos a rotas frequentes nesta etapa. Detalhes em `docs/rotas-reais.md`.
+
 1. Revisar e ampliar os contratos da API e modelos de dados a partir dos fluxos aprovados.
 2. Definir hospedagem e, se necessário, banco conforme as necessidades reais, incluindo dados geográficos.
 3. Validar disponibilidade, autorização e condições de uso das fontes; preparar ingestão, atualização e indicação de dados antigos.

@@ -4,6 +4,7 @@ import MapContextBar from "./components/MapContextBar";
 import RealMapLegend from "./components/RealMapLegend";
 import MapLayerControls from "./components/MapLayerControls";
 import RainLayer from "./components/RainLayer";
+import RealAlerts from "./components/RealAlerts";
 import MapResizeObserver from "./components/MapResizeObserver";
 import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
@@ -163,7 +164,7 @@ export default function App({real = false}) {
     [selectedSegment, setSelectedSegment] = useState(0),
     [centerSignal, setCenterSignal] = useState(0);
   const go = (next) => {
-    if (real && !["home", "compare", "save", "saved"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    if (real && !["home", "compare", "save", "saved", "alerts"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
     setSheetOpen(true);
     setView(next);
     if (next !== 'city') setCitySelection(null);
@@ -222,7 +223,7 @@ export default function App({real = false}) {
             aria-current={activeSection === "alerts" ? "page" : undefined}
             onClick={() => go("alerts")}
           >
-            Alertas {real ? <small>(simulação)</small> : <span className="count">{scenarioAlertVisible ? 1 : 0}</span>}
+            Alertas {!real && <span className="count">{scenarioAlertVisible ? 1 : 0}</span>}
           </button>
           <button
             className={"navlink " + (activeSection === "saved" ? "active" : "")}
@@ -265,7 +266,7 @@ export default function App({real = false}) {
         open={menu}
         onClose={() => setMenu(false)}
         onNavigate={go}
-        alertCount={real ? 0 : (scenarioAlertVisible ? 1 : 0)}
+        alertCount={real ? null : (scenarioAlertVisible ? 1 : 0)}
         triggerRef={menuTriggerRef}
       />
       <main className={"workspace " + (sheetOpen ? "sheet-open" : "sheet-closed")}>
@@ -438,7 +439,7 @@ export default function App({real = false}) {
             onTouchCancel={() => { sheetTouchStart.current = null; sheetDragged.current = false; }}
           ><span aria-hidden="true" /></button>
           <div className="panel-inner" id="panel-content">
-            <ExtraScreens
+            {!(real && view === 'alerts') && <ExtraScreens
               real={real}
               savedRoutesError={real ? realSavedError : ''}
               onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);go('home');}}
@@ -467,7 +468,8 @@ export default function App({real = false}) {
               setSelectedSegment={setSelectedSegment}
               showAlert={showAlert}
               setShowAlert={setShowAlert}
-            />
+            />}
+            {real && view === 'alerts' && <RealAlerts onBack={()=>go('home')}/>}
             {view === "city" && <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={event => { setCitySelection({event}); if (window.matchMedia?.('(max-width: 800px)').matches) setSheetOpen(false); else mapSurfaceRef.current?.scrollIntoView({block: 'center'}); }} onBack={() => go("home")} />}
             {view === "home" && (
               <>
@@ -575,7 +577,7 @@ export default function App({real = false}) {
                 >
                   <Search size={18} /> Comparar rotas
                 </button></>}
-                <div className="section-heading">
+                {real ? <><div className="section-heading"><div><span className="overline">Informações oficiais</span><h2>Avisos meteorológicos</h2></div></div><button className="secondary" onClick={()=>go('alerts')}>Consultar avisos do INMET</button></> : <><div className="section-heading">
                   <div>
                     <span className="overline">No seu caminho</span>
                     <h2>Fique por dentro {real && <small>· simulação</small>}</h2>
@@ -600,7 +602,7 @@ export default function App({real = false}) {
                   <div className="empty-state">
                     {showAlert ? 'Nenhum alerta de exemplo corresponde às preferências.' : 'Alerta de exemplo oculto na central de alertas.'}
                   </div>
-                )}
+                )}</>}
                 <div className="quick-actions">
                   <button onClick={() => go("reports")}>Ver relatos</button>
                   <button onClick={() => go("report")}>Criar relato</button>
@@ -613,7 +615,7 @@ export default function App({real = false}) {
                 <div className="notice">
                   <Info size={17} />
                   <span>
-                    {real ? "Alertas e relatos são simulados. As rotas e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
+                    {real ? "Relatos são simulados. As rotas, os avisos meteorológicos e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
                   </span>
                 </div>
               </>

@@ -1,6 +1,25 @@
 import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
-import {floodAreasAlongRoute} from './providers.js';
+import {floodAreasAlongRoute,drivingRoutes} from './providers.js';
+
+test('rejeita rotas do provedor sem geometria, duração ou distância válidas',async()=>{
+  const valid={type:'Feature',geometry:{type:'LineString',coordinates:[[-46.7,-23.5],[-46.69,-23.5]]},properties:{summary:{distance:1000,duration:100}}};
+  let features=[valid];
+  const fake=mock.method(globalThis,'fetch',async()=>({ok:true,json:async()=>({features})}));
+  try{
+    assert.deepEqual(await drivingRoutes([-46.7,-23.5],[-46.69,-23.5],'test'),[valid]);
+    for (const invalid of [
+      {...valid,geometry:{type:'LineString',coordinates:[[-46.7,-23.5]]}},
+      {...valid,geometry:{type:'LineString',coordinates:[[-46.7,-23.5],['-46.69',-23.5]]}},
+      {...valid,properties:{}},
+      {...valid,properties:{summary:{distance:1000,duration:-1}}},
+      {...valid,properties:{summary:{distance:null,duration:100}}},
+    ]){
+      features=[invalid];
+      await assert.rejects(drivingRoutes([-46.7,-23.5],[-46.69,-23.5],'test'));
+    }
+  }finally{fake.mock.restore();}
+});
 
 test('consulta manchas pela geometria exata em lotes e preserva truncamento',async()=>{
   const calls=[];

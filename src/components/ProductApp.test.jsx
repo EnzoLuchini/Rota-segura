@@ -6,6 +6,21 @@ vi.mock('react-leaflet',()=>({MapContainer:({children})=><div>{children}</div>,T
 import App from '../main';
 import {REAL_SAVED_ROUTES_KEY} from '../state/useRealSavedRoutes';
 
+it('abre avisos oficiais no fluxo real sem consultar a fonte antes de abrir a central',async()=>{
+  const user=userEvent.setup();
+  const fetchMock=vi.fn(url=>Promise.resolve({ok:true,json:async()=>url==='/api/alerts'?{status:'available',coverage:'unknown',checkedAt:'2026-11-11T18:00:00Z',alerts:[]}:{features:[],truncated:false}}));
+  vi.stubGlobal('fetch',fetchMock);
+  const previousScroll=HTMLElement.prototype.scrollTo;HTMLElement.prototype.scrollTo=vi.fn();
+  try{
+    render(<App real/>);
+    expect(fetchMock.mock.calls.some(([url])=>url==='/api/alerts')).toBe(false);
+    await user.click(screen.getByRole('button',{name:'Alertas'}));
+    expect(await screen.findByRole('heading',{name:'Avisos meteorológicos'})).toBeInTheDocument();
+    expect(await screen.findByText(/nenhum aviso vigente encontrado entre os itens consultados/i)).toBeInTheDocument();
+    expect(screen.queryByText('Alagamento na rota de volta')).not.toBeInTheDocument();
+  }finally{vi.unstubAllGlobals();HTMLElement.prototype.scrollTo=previousScroll;}
+});
+
 it('permite guardar a viagem real e reutilizar seus pontos depois de recarregar',async()=>{
   const user=userEvent.setup();
   const response=value=>Promise.resolve({ok:true,json:async()=>value});

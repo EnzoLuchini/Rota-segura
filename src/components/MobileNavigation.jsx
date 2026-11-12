@@ -60,7 +60,7 @@ export default function MobileNavigation({open, onClose, onNavigate, alertCount,
           type="button"
           onClick={() => navigate(target)}
         >
-          {target === 'alerts' ? `${label} (${alertCount})` : label}
+          {target === 'alerts' && alertCount != null ? `${label} (${alertCount})` : label}
         </button>
       ))}
     </nav>

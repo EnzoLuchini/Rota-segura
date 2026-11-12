@@ -83,6 +83,9 @@ export async function findPlaces(query, city, key) {
 }
 export async function drivingRoutes(origin, destination, key) {
   const data = await json('https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson', {method:'POST',headers:{Authorization:key,'Content-Type':'application/json'},body:JSON.stringify({coordinates:[origin,destination],alternative_routes:{target_count:3,weight_factor:1.6,share_factor:0.6}})});
-  if (!Array.isArray(data.features) || data.features.some(f => f.geometry?.type !== 'LineString')) throw new Error('Resposta de rotas inválida.');
+  if (!Array.isArray(data.features) || data.features.some(f => {
+    const coordinates=f?.geometry?.coordinates, summary=f?.properties?.summary;
+    return f?.geometry?.type !== 'LineString' || !Array.isArray(coordinates) || coordinates.length<2 || coordinates.some(c=>!Array.isArray(c) || c.length!==2 || !c.every(Number.isFinite) || Math.abs(c[0])>180 || Math.abs(c[1])>90) || !Number.isFinite(summary?.distance) || summary.distance<0 || !Number.isFinite(summary?.duration) || summary.duration<0;
+  })) throw new Error('Resposta de rotas inválida.');
   return data.features;
 }

@@ -4,6 +4,7 @@ import {cityBoundary, riskAreas, streams, historicalOccurrences, floodAreas, flo
 import {analyzeRoutes, routeWithinCity} from './analysis.js';
 import {analyzeFloodContext} from './floodContext.js';
 import {createRainProvider} from './rain.js';
+import {createAlertsProvider} from './alerts.js';
 
 function send(res, status, data) {
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
@@ -17,10 +18,12 @@ async function body(req) {
   for await (const chunk of req) { content += chunk; if (content.length > 4096) throw new Error('Pedido muito grande.'); }
   return JSON.parse(content);
 }
-export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
+export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), alerts:loadAlerts, historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
+  const alerts=loadAlerts || createAlertsProvider({cityBoundary:loadCity});
   return http.createServer(async (req,res) => {
     const url = new URL(req.url,'http://localhost');
     try {
+      if (req.method==='GET' && url.pathname==='/api/alerts') return send(res,200,await alerts());
       if (req.method==='GET' && url.pathname==='/api/rain') {
         if (!rainEnabled) return send(res,503,{error:'Dados de chuva indisponíveis: integração experimental desativada.'});
         return send(res,200,await loadRain());
@@ -56,7 +59,7 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
         if (![input.origin,input.destination].every(c => booleanPointInPolygon(point(c),city))) return send(res,400,{error:'Origem e destino devem estar no município de São Paulo.'});
         const routes = await loadRoutes(input.origin,input.destination,key);
         const valid = routes.filter(route => routeWithinCity(route,city));
-        if (!valid.length) return send(res,200,{routes:[],message:routes.length ? 'As rotas encontradas saem do município de São Paulo.' : 'Nenhuma rota foi encontrada.'});
+        if (!valid.length) return send(res,200,{routes:[],recommendationReason:'no_routes',sources:{risk:{status:'not_queried'},history:{alagamento:'not_queried',inundacao:'not_queried'}},message:routes.length ? 'As rotas encontradas saem do município de São Paulo.' : 'Nenhuma rota foi encontrada.'});
         let areas = null;
         try { areas = await loadRisk(); } catch { /* A rota continua disponível sem classificar risco. */ }
         let analyzed;
@@ -64,17 +67,19 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
         const values = analyzed.map(x => x.exposureMeters);
         const min = Math.min(...values), max = Math.max(...values);
         const recommended = areas && values.length > 1 && max-min >= 1 && values.filter(x => Math.abs(x-min)<1).length === 1 ? values.indexOf(min) : -1;
+        const recommendationReason = areas === null ? 'risk_unavailable' : values.length === 1 ? 'single_route' : max-min < 1 ? 'no_observed_difference' : recommended === -1 ? 'lowest_exposure_tie' : 'lowest_exposure';
         const coordinates=valid.flatMap(route=>route.geometry.coordinates), pad=0.0015;
         const box=[Math.min(...coordinates.map(c=>c[0]))-pad,Math.min(...coordinates.map(c=>c[1]))-pad,Math.max(...coordinates.map(c=>c[0]))+pad,Math.max(...coordinates.map(c=>c[1]))+pad];
         const queried=await Promise.allSettled([loadOccurrences(box,'alagamento'),loadOccurrences(box,'inundacao'),...valid.map(route=>loadFloodAlong(route.geometry.coordinates,5))]);
         const histories=queried.slice(0,2).map(item=>item.status==='fulfilled'?item.value:null);
+        const historyStatus=Object.fromEntries(['alagamento','inundacao'].map((kind,index)=>[kind,!histories[index]?'unavailable':histories[index].truncated?'partial':'available']));
         const history=histories.some(Boolean)?{features:histories.flatMap(item=>item?.features || []),truncated:histories.some(item=>!item || item.truncated)}:null;
         return send(res,200,{routes:analyzed.map((item,i) => {
           const floodData={5:queried[2+i].status==='fulfilled'?queried[2+i].value:null};
           let floodContext;
           try {floodContext=analyzeFloodContext(item.route,{history,areas:floodData});} catch {floodContext=analyzeFloodContext(item.route,{history:null,areas:{5:null}});}
           return {geometry:item.route.geometry,summary:item.route.properties?.summary,exposureMeters:item.exposureMeters,evidence:item.evidence || [],recommended:i===recommended,floodContext};
-        }),riskAvailable:areas !== null, riskAreas:areas || [],excludedOutside:routes.length-valid.length});
+        }),riskAvailable:areas !== null, sources:{risk:{status:areas === null ? 'unavailable' : 'available'},history:historyStatus},recommendationReason, riskAreas:areas || [],excludedOutside:routes.length-valid.length});
       }
       send(res,404,{error:'Serviço não encontrado.'});
     } catch { send(res,502,{error:'Não foi possível consultar os serviços de dados. Tente novamente.'}); }
