@@ -9,7 +9,7 @@ export function useRealRoutes() {
   const [riskAvailable,setRiskAvailable] = useState(false), [message,setMessage] = useState(''), [busy,setBusy] = useState(false);
   const [recommendationReason,setRecommendationReason]=useState(null), [sources,setSources]=useState(null);
   const [water,setWater] = useState(false);
-  const [rain,setRain] = useState(false);
+  const [rain,setRain] = useState(true);
   const [risk,setRisk] = useState(true);
   const [history,setHistory] = useState(true);
   const [floodPeriod,setFloodPeriod] = useState(0);
@@ -96,7 +96,7 @@ export function RealSearch({data,onCompare}) {
 
 const formatDate=value=>value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}) : 'não informado';
 const formatNumber=value=>value.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
-const formatMeasurement=value=>value.toLocaleString('pt-BR',{maximumFractionDigits:20,useGrouping:false});
+const formatMeasurement=value=>Number(value.toPrecision(15)).toLocaleString('pt-BR',{maximumFractionDigits:20,useGrouping:false});
 const reasonText={
   sources_incomplete:'Não é possível recomendar: uma ou mais fontes estão indisponíveis, incompletas ou sem cobertura técnica.',
   risk_unavailable:'Não é possível recomendar: a fonte de áreas de risco está indisponível.',
@@ -104,6 +104,21 @@ const reasonText={
   score_tie:'Não há recomendação: as alternativas apresentam empate ou diferença inferior a um ponto.',
   lowest_combined_score:'Recomendação experimental: menor pontuação relativa entre as alternativas desta consulta.'
 };
+
+function incompleteSourceDetails(data) {
+  const labels={partial:'parcial',unavailable:'indisponível',not_queried:'não consultado'};
+  const details=[];
+  const add=(name,status)=>{if(labels[status]) details.push(`${name}: ${labels[status]}.`);};
+  add('Áreas de risco',data.sources?.risk?.status);
+  add('Histórico de alagamentos',data.sources?.history?.alagamento);
+  add('Histórico de inundações',data.sources?.history?.inundacao);
+  add('Chuva',data.sources?.rain?.status);
+  data.routes.forEach((route,i)=>{
+    if(route.rain?.uncoveredSamples>0 && Number.isFinite(route.rain.totalSamples)) details.push(`Trajeto ${i+1}: ${route.rain.uncoveredSamples} de ${route.rain.totalSamples} amostras sem estação de chuva válida a até 3 km.`);
+  });
+  if(data.sources?.history?.alagamento==='available' && data.sources?.history?.inundacao==='available' && data.routes.some(route=>route.floodContext?.history?.status==='unavailable')) details.push('Não foi possível relacionar os registros históricos a todos os trajetos.');
+  return details;
+}
 
 export function RealComparison({data,onBack,onSave}) {
   const [clock,setClock]=useState(Date.now);
@@ -117,17 +132,22 @@ export function RealComparison({data,onBack,onSave}) {
     return()=>{if(timer!==null)clearTimeout(timer);document.removeEventListener('visibilitychange',update);};
   },[deadline]);
   const expired=deadline!==null && clock>=deadline;
+  const sourceDetails=data.recommendationReason==='sources_incomplete' || data.recommendationReason==='risk_unavailable' ? incompleteSourceDetails(data) : [];
+  const routeMeasurement=(value,select)=>{
+    const formatted=formatMeasurement(value);
+    return data.routes.some(route=>{const other=select(route);return Number.isFinite(other) && other!==value && formatMeasurement(other)===formatted;}) ? value.toLocaleString('pt-BR',{maximumFractionDigits:20,useGrouping:false}) : formatted;
+  };
   const fastest=Math.min(...data.routes.map(route=>route.summary?.duration ?? Infinity));
   const selected=data.routes[data.selected];
   return <><button className="back" onClick={onBack}><ArrowLeft size={18}/> Voltar ao início</button><span className="overline">Sua viagem</span><h1>Compare suas rotas</h1><p className="intro route-address">{data.origin?.label} <ArrowRight size={15}/> {data.destination?.label}</p>
     {data.message && <div className="selection-warning" role="status">{data.message}</div>}
-    {expired ? <div className="selection-warning" role="status">As medições de chuva venceram. Consulte as rotas novamente para atualizar a comparação.</div> : reasonText[data.recommendationReason] && <div className="selection-warning" role="status">{reasonText[data.recommendationReason]}</div>}
+    {expired ? <div className="selection-warning" role="status">As medições de chuva venceram. Consulte as rotas novamente para atualizar a comparação.</div> : reasonText[data.recommendationReason] && <div className="selection-warning" role="status"><span>{reasonText[data.recommendationReason]}</span>{sourceDetails.length>0 && <ul>{sourceDetails.map(detail=><li key={detail}>{detail}</li>)}</ul>}</div>}
     {!data.riskAvailable && <div className="selection-warning" role="status">Dados de risco indisponíveis. Não é possível comparar a exposição.</div>}
     <p className="comparison-hint">Selecione uma alternativa para destacá-la no mapa.</p>
     <div className="route-list real-route-list" role="group" aria-label="Escolha uma rota">{data.routes.map((route,i)=><button className={'route-card '+(data.selected===i?'selected':'')} key={i} onClick={()=>data.setSelected(i)} aria-pressed={data.selected===i}><span className="radio"/><span className="route-content"><span className="route-label">Trajeto {i+1} {data.selected===i && <span className="recommended">Selecionado</span>}</span><span className="route-stats"><strong>{Math.round((route.summary?.duration||0)/60)} min</strong><span>{((route.summary?.distance||0)/1000).toFixed(1)} km{route.summary?.duration===fastest?' · Mais rápida':''}</span></span>
-      <small>{route.exposureMeters==null?'Áreas mapeadas indisponíveis':`${formatMeasurement(route.exposureMeters)} m do trajeto em áreas mapeadas`}</small>
+      <small>{route.exposureMeters==null?'Áreas mapeadas indisponíveis':`${routeMeasurement(route.exposureMeters,item=>item.exposureMeters)} m do trajeto em áreas mapeadas`}</small>
       <small>{route.historyCount==null?'Histórico incompleto ou indisponível':`${route.historyCount} registros históricos a até 100 m`}</small>
-      <small>{route.rain?.maxMm==null?'Chuva indisponível':`Chuva: ${formatMeasurement(route.rain.maxMm)} mm · ${expired?'medição antiga':route.rain.status==='available'?'estações associadas':'cobertura parcial'}`}</small>
+      <small>{route.rain?.maxMm==null?'Chuva indisponível':`Chuva: ${routeMeasurement(route.rain.maxMm,item=>item.rain?.maxMm)} mm · ${expired?'medição antiga':route.rain.status==='available'?'estações associadas':'cobertura parcial'}`}</small>
       <small>{expired || route.score==null?'Pontuação indisponível':`${formatNumber(route.score)} pontos · comparação experimental`}</small>
       {!expired && route.recommended && <span className="real-recommended">Menor pontuação relativa nesta consulta</span>}</span></button>)}</div>
     <details className="real-explanation"><summary>Como funciona a comparação experimental?</summary><p>Os indicadores são normalizados entre as alternativas desta viagem: 50% áreas mapeadas, 30% registros históricos e 20% chuva. Os pesos são hipóteses não calibradas; a pontuação não é probabilidade nem pode ser comparada com outra viagem.</p><p>As áreas do GeoSampa têm cobertura limitada. Registros da Defesa Civil são históricos, da camada consultada do ano corrente, e a distância de 100 m é experimental. Nenhum registro encontrado não comprova ausência de risco.</p><p>A chuva é medida nas estações associadas por amostragem a cada 250 m e distância máxima de 3 km. Esses limites são experimentais; a estação não mede a condição de toda a via.</p></details>

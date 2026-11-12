@@ -4,10 +4,11 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {useRealRoutes} from './RealRoutes';
 
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
-it('inicia com áreas de risco e registros históricos selecionados',()=>{
+it('inicia com chuva, áreas de risco e registros históricos selecionados',()=>{
   const {result}=renderHook(()=>useRealRoutes());
   expect(result.current.risk).toBe(true);
   expect(result.current.history).toBe(true);
+  expect(result.current.rain).toBe(true);
   expect(result.current.water).toBe(false);
 });
 it('reutiliza a rota apenas até vencer a validade da chuva',async()=>{
@@ -57,4 +58,11 @@ it('preserva o motivo da comparação retornado pela API',async()=>{
   await act(async()=>{await result.current.compare(()=>{});});
   expect(result.current.recommendationReason).toBe('sources_incomplete');
   expect(result.current.sources.rain.status).toBe('partial');
+});
+
+it('permite ocultar a camada de chuva que inicia marcada',()=>{
+  const {result}=renderHook(()=>useRealRoutes());
+  expect(result.current.rain).toBe(true);
+  act(()=>result.current.setRain(false));
+  expect(result.current.rain).toBe(false);
 });

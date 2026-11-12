@@ -41,3 +41,28 @@ it('mostra diferenças dos valores reais que afetam a pontuação',()=>{
  expect(screen.getByText(/0,1 m do trajeto/i)).toBeInTheDocument();expect(screen.getByText(/0,4 m do trajeto/i)).toBeInTheDocument();
  expect(screen.getByText(/0,11 mm/i)).toBeInTheDocument();expect(screen.getByText(/0,14 mm/i)).toBeInTheDocument();
 });
+
+it('indica quais fontes estão indisponíveis ou parciais',()=>{
+ const d=data(); d.recommendationReason='sources_incomplete';
+ d.sources={risk:{status:'available'},history:{alagamento:'partial',inundacao:'unavailable'},rain:{status:'partial'}};
+ d.routes.forEach((r,i)=>{r.score=null;r.recommended=false;r.rain={status:i===0?'partial':'available',maxMm:1,stations:[],uncoveredSamples:i===0?3:0,totalSamples:10};});
+ render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+ expect(screen.getByText(/histórico de alagamentos.*parcial/i)).toBeInTheDocument();
+ expect(screen.getByText(/histórico de inundações.*indisponível/i)).toBeInTheDocument();
+ expect(screen.getByText(/chuva.*parcial/i,{selector:'li'})).toBeInTheDocument();
+ expect(screen.getByText(/trajeto 1.*3 de 10 amostras/i)).toBeInTheDocument();
+});
+
+it('apresenta medições sem ruído de precisão numérica',()=>{
+ const d=data();d.routes[0].rain={...rain,maxMm:0.7999999999999998};
+ render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+ expect(screen.getByText(/chuva: 0,8 mm/i)).toBeInTheDocument();
+ expect(screen.queryByText(/0,7999999999999998/)).not.toBeInTheDocument();
+});
+
+it('mantém diferenças significativas quando valores aproximados coincidiriam',()=>{
+ const d=data();d.routes[0].rain={...rain,maxMm:0.8};d.routes[1].rain={...rain,maxMm:0.8000000000000002};
+ render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+ expect(screen.getByText(/chuva: 0,8 mm/i)).toBeInTheDocument();
+ expect(screen.getByText(/chuva: 0,8000000000000002 mm/i)).toBeInTheDocument();
+});
