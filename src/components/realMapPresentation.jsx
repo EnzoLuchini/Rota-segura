@@ -3,6 +3,7 @@ import {divIcon} from 'leaflet';
 import {CalendarDays, History, MapPin, Navigation, RadioTower} from 'lucide-react';
 
 export const historyKind=type=>type==='INUNDACAO'?'inundação':'alagamento';
+export const historyKey=feature=>feature.id==null?null:JSON.stringify([feature.kind || (feature.type==='INUNDACAO' || feature.properties?.dc_tipo_ocorrencia==='INUNDACAO'?'inundacao':'alagamento'),String(feature.id)]);
 export function formatSourceDate(value) {
   const match=typeof value==='string' && /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   return match ? `${match[3]}/${match[2]}/${match[1]}` : 'Não informada';
@@ -54,17 +55,18 @@ export function groupHistoryFeatures(features,project,spacing=52) {
     }
     groups=next;
   } while(merged);
-  return groups.map(group=>({...group,key:group.features.map((feature,i)=>feature.id ?? `${group.index}-${i}`).join('|'),position:[group.lat/group.count,group.lon/group.count]}));
+  return groups.map(group=>({...group,key:group.features.map((feature,i)=>historyKey(feature) ?? `${group.index}-${i}`).join('|'),position:[group.lat/group.count,group.lon/group.count]}));
 }
 
 export function mergeHistoryFeatures(mapFeatures,routeEvents) {
   const result=[...mapFeatures], indices=new Map();
-  result.forEach((feature,index)=>{if(feature.id != null)indices.set(feature.id,index);});
+  result.forEach((feature,index)=>{const key=historyKey(feature);if(key!==null)indices.set(key,index);});
   for(const event of routeEvents) {
-    const index=event.id == null ? undefined : indices.get(event.id);
+    const key=historyKey(event);
+    const index=key===null ? undefined : indices.get(key);
     const existing=index === undefined ? null : result[index];
-    const feature={...existing,id:event.id,geometry:existing?.geometry || {type:'Point',coordinates:event.coordinates},properties:{...existing?.properties,dc_tipo_ocorrencia:event.type ?? existing?.properties?.dc_tipo_ocorrencia,dt_ocorrencia:event.date ?? existing?.properties?.dt_ocorrencia,dt_carga:event.loadedAt ?? existing?.properties?.dt_carga,distanceMeters:event.distanceMeters}};
-    if(index === undefined) {if(event.id != null)indices.set(event.id,result.length);result.push(feature);} else result[index]=feature;
+    const feature={...existing,id:event.id,kind:event.kind || existing?.kind,geometry:existing?.geometry || {type:'Point',coordinates:event.coordinates},properties:{...existing?.properties,dc_tipo_ocorrencia:event.type ?? existing?.properties?.dc_tipo_ocorrencia,dt_ocorrencia:event.date ?? existing?.properties?.dt_ocorrencia,dt_carga:event.loadedAt ?? existing?.properties?.dt_carga,distanceMeters:event.distanceMeters}};
+    if(index === undefined) {if(key!==null)indices.set(key,result.length);result.push(feature);} else result[index]=feature;
   }
   return result;
 }

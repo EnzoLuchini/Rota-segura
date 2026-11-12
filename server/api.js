@@ -5,6 +5,7 @@ import {analyzeRoutes, routeWithinCity} from './analysis.js';
 import {analyzeFloodContext} from './floodContext.js';
 import {createRainProvider} from './rain.js';
 import {createAlertsProvider} from './alerts.js';
+import {distinctHistory, hasStableHistoryId, rainForRoute, scoreRoutes} from './routeScoring.js';
 
 function send(res, status, data) {
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
@@ -60,26 +61,36 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
         const routes = await loadRoutes(input.origin,input.destination,key);
         const valid = routes.filter(route => routeWithinCity(route,city));
         if (!valid.length) return send(res,200,{routes:[],recommendationReason:'no_routes',sources:{risk:{status:'not_queried'},history:{alagamento:'not_queried',inundacao:'not_queried'}},message:routes.length ? 'As rotas encontradas saem do município de São Paulo.' : 'Nenhuma rota foi encontrada.'});
-        let areas = null;
-        try { areas = await loadRisk(); } catch { /* A rota continua disponível sem classificar risco. */ }
-        let analyzed;
-        try { analyzed = analyzeRoutes(valid,areas); } catch { areas = null; analyzed = analyzeRoutes(valid,null); }
-        const values = analyzed.map(x => x.exposureMeters);
-        const min = Math.min(...values), max = Math.max(...values);
-        const recommended = areas && values.length > 1 && max-min >= 1 && values.filter(x => Math.abs(x-min)<1).length === 1 ? values.indexOf(min) : -1;
-        const recommendationReason = areas === null ? 'risk_unavailable' : values.length === 1 ? 'single_route' : max-min < 1 ? 'no_observed_difference' : recommended === -1 ? 'lowest_exposure_tie' : 'lowest_exposure';
         const coordinates=valid.flatMap(route=>route.geometry.coordinates), pad=0.0015;
         const box=[Math.min(...coordinates.map(c=>c[0]))-pad,Math.min(...coordinates.map(c=>c[1]))-pad,Math.max(...coordinates.map(c=>c[0]))+pad,Math.max(...coordinates.map(c=>c[1]))+pad];
-        const queried=await Promise.allSettled([loadOccurrences(box,'alagamento'),loadOccurrences(box,'inundacao'),...valid.map(route=>loadFloodAlong(route.geometry.coordinates,5))]);
-        const histories=queried.slice(0,2).map(item=>item.status==='fulfilled'?item.value:null);
-        const historyStatus=Object.fromEntries(['alagamento','inundacao'].map((kind,index)=>[kind,!histories[index]?'unavailable':histories[index].truncated?'partial':'available']));
-        const history=histories.some(Boolean)?{features:histories.flatMap(item=>item?.features || []),truncated:histories.some(item=>!item || item.truncated)}:null;
-        return send(res,200,{routes:analyzed.map((item,i) => {
-          const floodData={5:queried[2+i].status==='fulfilled'?queried[2+i].value:null};
+        const queried=await Promise.allSettled([
+          loadRisk(),loadOccurrences(box,'alagamento'),loadOccurrences(box,'inundacao'),
+          rainEnabled?loadRain():Promise.reject(new Error('Chuva desativada.')),
+          ...valid.map(route=>loadFloodAlong(route.geometry.coordinates,5))
+        ]);
+        let areas=queried[0].status==='fulfilled'?queried[0].value:null;
+        let analyzed;
+        try {analyzed=analyzeRoutes(valid,areas);} catch {areas=null;analyzed=analyzeRoutes(valid,null);}
+        const histories=queried.slice(1,3).map(item=>item.status==='fulfilled'?item.value:null);
+        const historyStatus=Object.fromEntries(['alagamento','inundacao'].map((kind,index)=>[kind,!histories[index]?'unavailable':histories[index].truncated || histories[index].features.some(feature=>!hasStableHistoryId(feature))?'partial':'available']));
+        const combined=distinctHistory(histories.flatMap((item,index)=>(item?.features || []).map(feature=>({...feature,kind:['alagamento','inundacao'][index]}))));
+        const historyComplete=histories.every(item=>item && !item.truncated) && combined.complete;
+        const history=histories.some(Boolean)?{features:combined.features,truncated:!historyComplete}:null;
+        const rainData=queried[3].status==='fulfilled'?queried[3].value:null;
+        const computed=analyzed.map((item,i)=>{
+          const floodData={5:queried[4+i].status==='fulfilled'?queried[4+i].value:null};
           let floodContext;
           try {floodContext=analyzeFloodContext(item.route,{history,areas:floodData});} catch {floodContext=analyzeFloodContext(item.route,{history:null,areas:{5:null}});}
-          return {geometry:item.route.geometry,summary:item.route.properties?.summary,exposureMeters:item.exposureMeters,evidence:item.evidence || [],recommended:i===recommended,floodContext};
-        }),riskAvailable:areas !== null, sources:{risk:{status:areas === null ? 'unavailable' : 'available'},history:historyStatus},recommendationReason, riskAreas:areas || [],excludedOutside:routes.length-valid.length});
+          let rain;
+          try {rain=rainForRoute(item.route,rainData);} catch {rain={status:'unavailable',maxMm:null,stations:[],queriedAt:rainData?.queriedAt || null,validUntil:null};}
+          return {geometry:item.route.geometry,summary:item.route.properties?.summary,exposureMeters:item.exposureMeters,evidence:item.evidence || [],floodContext,historyCount:floodContext.history.status==='available'?floodContext.history.events.length:null,rain};
+        });
+        const rainStatus=!rainData?'unavailable':computed.every(r=>r.rain.status==='available')?'available':computed.some(r=>r.rain.status!=='unavailable')?'partial':'unavailable';
+        const complete=areas!==null && historyComplete && rainStatus==='available' && computed.every(r=>r.floodContext.history.status==='available');
+        const score=scoreRoutes(computed.map(r=>({exposureMeters:r.exposureMeters,historyCount:complete?r.historyCount:null,rainMm:complete?r.rain.maxMm:null})));
+        const recommendationReason=areas===null?'risk_unavailable':valid.length===1?'single_route':score.reason;
+        const recommended=complete?score.recommended:-1;
+        return send(res,200,{routes:computed.map((item,i)=>({...item,score:complete?score.scores[i]:null,recommended:i===recommended})),riskAvailable:areas!==null,sources:{risk:{status:areas===null?'unavailable':'available'},history:historyStatus,rain:{status:rainStatus,queriedAt:rainData?.queriedAt || null}},recommendationReason,riskAreas:areas || [],excludedOutside:routes.length-valid.length});
       }
       send(res,404,{error:'Serviço não encontrado.'});
     } catch { send(res,502,{error:'Não foi possível consultar os serviços de dados. Tente novamente.'}); }

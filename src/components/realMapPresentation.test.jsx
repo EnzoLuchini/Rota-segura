@@ -53,3 +53,10 @@ describe('apresentação de dados históricos no mapa real',()=>{
   });
 
 });
+
+it('preserva ocorrências de camadas diferentes com o mesmo identificador',()=>{
+ const map=[{id:'1',kind:'alagamento',geometry:{coordinates:[10,20]},properties:{dc_tipo_ocorrencia:'ALAGAMENTO'}},{id:'1',kind:'inundacao',geometry:{coordinates:[10,20]},properties:{dc_tipo_ocorrencia:'INUNDACAO'}}];
+ const routes=[{id:'1',kind:'alagamento',type:'ALAGAMENTO',coordinates:[10,20],distanceMeters:10},{id:'1',kind:'inundacao',type:'INUNDACAO',coordinates:[10,20],distanceMeters:20}];
+ const result=mergeHistoryFeatures(map,routes);
+ expect(result).toHaveLength(2);expect(result.map(feature=>feature.properties.distanceMeters)).toEqual([10,20]);
+});

@@ -4,7 +4,7 @@ const status = data => !data ? 'unavailable' : data.truncated ? 'partial' : 'ava
 export function analyzeFloodContext(route,{history,areas}) {
   const events = (history?.features || []).map(feature => {
     const nearest=nearestPointOnLine(route,feature,{units:'meters'});
-    return {id:feature.id,coordinates:feature.geometry.coordinates,segmentIndex:Math.min(nearest.properties.index,route.geometry.coordinates.length-2),distanceMeters:nearest.properties.dist,date:feature.properties?.dt_ocorrencia || null,loadedAt:feature.properties?.dt_carga || null,type:feature.properties?.dc_tipo_ocorrencia || null};
+    return {id:feature.id,kind:feature.kind || null,coordinates:feature.geometry.coordinates,segmentIndex:Math.min(nearest.properties.index,route.geometry.coordinates.length-2),distanceMeters:nearest.properties.dist,date:feature.properties?.dt_ocorrencia || null,loadedAt:feature.properties?.dt_carga || null,type:feature.properties?.dc_tipo_ocorrencia || (feature.kind==='inundacao'?'INUNDACAO':feature.kind==='alagamento'?'ALAGAMENTO':null)};
   }).filter(event=>event.distanceMeters<=100);
   const analyzedAreas=Object.fromEntries(Object.entries(areas).map(([period,data])=>{
     const indexes=new Set();

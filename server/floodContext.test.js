@@ -24,3 +24,8 @@ test('registro junto ao destino pertence ao último trecho existente',()=>{
   const result=analyzeFloodContext(route,{history:{features:[point('end',[-46.68,-23.5])],truncated:false},areas:{}});
   assert.equal(result.history.events[0].segmentIndex,1);
 });
+
+test('preserva a camada de origem do registro histórico associado',()=>{
+  const result=analyzeFloodContext(route,{history:{features:[{...point('same',[-46.695,-23.5]),kind:'alagamento'},{...point('same',[-46.695,-23.5]),kind:'inundacao'}],truncated:false},areas:{}});
+  assert.deepEqual(result.history.events.map(event=>event.kind),['alagamento','inundacao']);
+});

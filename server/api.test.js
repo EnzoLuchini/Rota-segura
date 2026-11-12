@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from './api.js';
+import {createServer as createRealServer} from './api.js';
+const createServer=(options={})=>createRealServer({rain:async()=>{const now=Date.now();return {queriedAt:new Date(now).toISOString(),partial:false,stations:[{id:'test',name:'Teste',coordinates:[-46.695,-23.505],value:0,start:new Date(now-3600000).toISOString(),end:new Date(now-60000).toISOString()}]};},...options});
 
 test('a central distingue avisos consultados de fonte indisponível',async()=>{
   for(const [alerts,status] of [[async()=>({status:'partial',coverage:'unknown',checkedAt:'2026-11-11T18:30:00Z',alerts:[]}),200],[async()=>{throw Error('offline');},502]]){
@@ -37,7 +38,7 @@ test('a API informa ausência de recomendação quando as alternativas têm mesm
   try {
     const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
     const data=await response.json();
-    assert.equal(data.recommendationReason,'no_observed_difference');
+    assert.equal(data.recommendationReason,'score_tie');
     assert.ok(data.routes.every(route=>!route.recommended));
   } finally {server.close();}
 });
@@ -47,7 +48,7 @@ test('a API distingue menor exposição isolada, empate e ausência de trajetos'
   const area={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.7,-23.515],[-46.69,-23.515],[-46.69,-23.505],[-46.7,-23.505],[-46.7,-23.515]]]}};
   const route=lat=>({type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,lat],[-46.69,lat]]}});
   const dataset={type:'FeatureCollection',features:[],truncated:false};
-  for(const [routes,reason,recommended,status] of [[[route(-23.5),route(-23.51)],'lowest_exposure',[true,false],'available'],[[route(-23.5),route(-23.5),route(-23.51)],'lowest_exposure_tie',[false,false,false],'available'],[[],'no_routes',[],'not_queried']]){
+  for(const [routes,reason,recommended,status] of [[[route(-23.5),route(-23.51)],'lowest_combined_score',[true,false],'available'],[[route(-23.5),route(-23.5),route(-23.51)],'score_tie',[false,false,false],'available'],[[],'no_routes',[],'not_queried']]){
     const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[area],drivingRoutes:async()=>routes,historicalOccurrences:async()=>dataset,floodAreasAlongRoute:async()=>dataset});
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
     try{
@@ -171,4 +172,40 @@ test('valida a localização no limite municipal sem exigir chave de rotas',asyn
     assert.equal((await post([-46.9,-23.5])).status,400);
     assert.equal((await post(['x',-23.5])).status,400);
   } finally {server.close();}
+});
+
+test('comparação combina as fontes e não recomenda quando chuva ou histórico são incompletos',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  const route=lat=>({type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,lat],[-46.69,lat]]}});
+  const empty={type:'FeatureCollection',features:[],truncated:false};
+  const now=Date.now(), rain={queriedAt:new Date(now).toISOString(),partial:false,stations:[{id:'a',name:'Estação A',coordinates:[-46.695,-23.5],value:3,start:new Date(now-3600000).toISOString(),end:new Date(now-60000).toISOString()}]};
+  for(const partial of [false,true]){
+    const server=createServer({key:'test',cityBoundary:async()=>city,riskAreas:async()=>[],drivingRoutes:async()=>[route(-23.5),route(-23.51)],historicalOccurrences:async (_box,kind)=>kind==='alagamento'?{...empty,features:[{type:'Feature',id:'event',geometry:{type:'Point',coordinates:[-46.695,-23.5]},properties:{}}]}:empty,floodAreasAlongRoute:async()=>empty,rain:async()=>({...rain,partial})});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try{
+      const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
+      const data=await response.json();assert.equal(response.status,200);
+      assert.equal(data.sources.rain.status,partial?'partial':'available');
+      assert.equal(data.routes[0].historyCount,1);assert.equal(data.routes[1].historyCount,0);
+      assert.equal(data.routes[1].recommended,!partial);
+      assert.equal(data.recommendationReason,partial?'sources_incomplete':'lowest_combined_score');
+      assert.equal(data.routes[0].rain.stations[0].name,'Estação A');
+    }finally{server.close();}
+  }
+});
+
+test('bloqueia recomendação com chuva desativada ou histórico sem identificador',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  const route=lat=>({type:'Feature',properties:{summary:{distance:1000,duration:100}},geometry:{type:'LineString',coordinates:[[-46.7,lat],[-46.69,lat]]}});
+  const empty={type:'FeatureCollection',features:[],truncated:false};
+  for(const missingId of [false,true]){
+    const server=createServer({key:'test',rainEnabled:missingId,cityBoundary:async()=>city,riskAreas:async()=>[],drivingRoutes:async()=>[route(-23.5),route(-23.51)],historicalOccurrences:async (_box,kind)=>missingId && kind==='alagamento'?{...empty,features:[{type:'Feature',id:' ',geometry:{type:'Point',coordinates:[-46.695,-23.5]},properties:{}}]}:empty,floodAreasAlongRoute:async()=>empty});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try{
+      const response=await fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5]})});
+      const data=await response.json();assert.equal(data.recommendationReason,'sources_incomplete');
+      assert.ok(data.routes.every(r=>r.recommended===false && r.score===null));
+      if(missingId) {assert.equal(data.sources.history.alagamento,'partial');assert.ok(data.routes.every(r=>r.floodContext.history.status==='partial'));}else assert.equal(data.sources.rain.status,'unavailable');
+    }finally{server.close();}
+  }
 });

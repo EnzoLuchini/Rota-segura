@@ -114,3 +114,7 @@
 }
 .rain-popup p { margin: 0.5em 0; }
 .local-card > strong { display: block; }
+
+/* Indicadores da comparação real permanecem legíveis em cada cartão. */
+.real-route-list .route-content small{display:block;font-size:12px;line-height:1.5;margin-top:4px;overflow-wrap:anywhere}
+.selection-warning + .comparison-hint{margin-top:12px}
