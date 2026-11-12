@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {ArrowLeft,ShieldAlert} from 'lucide-react';
 
 const date=value=>new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(new Date(value));
@@ -6,6 +6,15 @@ const severity=value=>({Extreme:'Extrema',Severe:'Severa',Moderate:'Moderada',Mi
 
 export default function RealAlerts({onBack}){
   const [data,setData]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(null),[clock,setClock]=useState(Date.now()),[attempt,setAttempt]=useState(0);
+  const heading=useRef(null), moveFocus=useRef(false);
+  useLayoutEffect(()=>{
+    if (!moveFocus.current) return;
+    moveFocus.current=false;
+    const panel=heading.current?.closest('.panel');
+    if (panel) panel.scrollTop=0;
+    heading.current?.focus({preventScroll:true});
+  },[selected]);
+  const selectAlert=id=>{moveFocus.current=true;setSelected(id);};
   useEffect(()=>{
     let active=true,controller;
     async function load(){
@@ -19,8 +28,8 @@ export default function RealAlerts({onBack}){
   const current=(data?.alerts || []).filter(item=>Date.parse(item.start)<=clock && clock<Date.parse(item.end));
   const detail=current.find(item=>item.id===selected);
   return <>
-    <button className="back" onClick={detail?()=>setSelected(null):onBack}><ArrowLeft size={18}/> {detail?'Voltar aos avisos':'Voltar'}</button>
-    <span className="overline">Informações oficiais</span><h1>{detail?'Detalhes do aviso':'Avisos meteorológicos'}</h1>
+    <button className="back" onClick={detail?()=>selectAlert(null):onBack}><ArrowLeft size={18}/> {detail?'Voltar aos avisos':'Voltar'}</button>
+    <span className="overline">Informações oficiais</span><h1 ref={heading} tabIndex={-1}>{detail?'Detalhes do aviso':'Avisos meteorológicos'}</h1>
     <p className="intro">Avisos do INMET para áreas que intersectam o município de São Paulo. Não confirmam alagamento em uma via.</p>
     {error && <p role="alert" className="selection-warning">{error}</p>}
     {error && <button className="secondary" onClick={()=>setAttempt(value=>value+1)}>Tentar novamente</button>}
@@ -29,7 +38,7 @@ export default function RealAlerts({onBack}){
       <p className="footnote">Consulta em {date(data.checkedAt)} (horário de Brasília). A cobertura do feed não foi confirmada; consulte também o INMET.</p>
       {data.status==='partial' && <p className="selection-warning" role="status">Consulta parcial: alguns avisos não puderam ser verificados ou faltam versões anteriores.</p>}
       {detail ? <article className="local-card"><strong>{detail.headline}</strong><p>Severidade: {severity(detail.severity)}</p><p>Início: {date(detail.start)} · Fim: {date(detail.end)} (horário de Brasília)</p><p>{detail.description}</p><p>Fonte: INMET</p><a href={detail.url} target="_blank" rel="noopener noreferrer">Abrir aviso oficial</a></article> : <>
-        {current.length===0 ? <div className="empty-state">Nenhum aviso vigente encontrado entre os itens consultados. Isso não significa ausência de risco ou de outros avisos.</div> : current.map((item,i)=><button className="alert-card" key={`${item.id}-${i}`} onClick={()=>setSelected(item.id)}><span className="alert-icon"><ShieldAlert size={20}/></span><span><strong>{item.headline}</strong><small>INMET · {severity(item.severity)} · até {date(item.end)}</small></span></button>)}
+        {current.length===0 ? <div className="empty-state">Nenhum aviso vigente encontrado entre os itens consultados. Isso não significa ausência de risco ou de outros avisos.</div> : current.map((item,i)=><button className="alert-card" key={`${item.id}-${i}`} onClick={()=>selectAlert(item.id)}><span className="alert-icon"><ShieldAlert size={20}/></span><span><strong>{item.headline}</strong><small>INMET · {severity(item.severity)} · até {date(item.end)}</small></span></button>)}
       </>}
       <p className="footnote">Os avisos são meteorológicos, podem abranger uma região maior e não substituem orientações da Defesa Civil. Não há notificações automáticas.</p>
     </>}

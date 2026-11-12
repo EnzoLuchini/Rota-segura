@@ -32,3 +32,18 @@ it('permite tentar novamente após falha da fonte',async()=>{
   await user.click(screen.getByRole('button',{name:/tentar novamente/i}));
   expect(await screen.findByText(/nenhum aviso vigente encontrado entre os itens consultados/i)).toBeInTheDocument();
 });
+
+it('ao abrir e voltar do detalhe, leva o painel ao início e o foco ao título',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'partial',coverage:'unknown',checkedAt:'2026-11-11T18:00:00Z',alerts:[item]})}));
+  const user=userEvent.setup();
+  const {container}=render(<aside className="panel"><RealAlerts onBack={()=>{}}/></aside>);
+  const panel=container.querySelector('.panel');
+  panel.scrollTop=280;
+  await user.click(await screen.findByRole('button',{name:/aviso de tempestade/i}));
+  expect(screen.getByRole('heading',{name:'Detalhes do aviso'})).toHaveFocus();
+  expect(panel.scrollTop).toBe(0);
+  panel.scrollTop=280;
+  await user.click(screen.getByRole('button',{name:/voltar aos avisos/i}));
+  expect(screen.getByRole('heading',{name:'Avisos meteorológicos'})).toHaveFocus();
+  expect(panel.scrollTop).toBe(0);
+});

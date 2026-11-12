@@ -77,3 +77,16 @@ it('permite informar endereço quando o navegador não fornece localização',as
   await user.click(screen.getByRole('button',{name:/usar minha localização atual/i}));
   expect(screen.getByText(/localização indisponível neste navegador/i)).toBeInTheDocument();
 });
+
+it('informa indisponibilidade quando a busca recebe uma resposta inválida ou a rede falha',async()=>{
+  const user=userEvent.setup();
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce({ok:false,json:async()=>{throw new SyntaxError('Unexpected end of JSON input');}}).mockRejectedValueOnce(new TypeError('Failed to fetch')));
+  render(<Example/>);
+  const origin=screen.getByLabelText('Origem');
+  await user.type(origin,'Paulista');
+  expect(await screen.findByText(/não foi possível consultar os dados/i)).toBeInTheDocument();
+  await user.clear(origin);
+  await user.type(origin,'Ibirapuera');
+  expect(await screen.findByText(/não foi possível consultar os dados/i)).toBeInTheDocument();
+  expect(screen.queryByText(/failed to fetch|unexpected end/i)).not.toBeInTheDocument();
+});

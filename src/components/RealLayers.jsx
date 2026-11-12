@@ -9,8 +9,14 @@ const cachedMapRequest=url=>mapCache.get(url,()=>request(url));
 const roundedBounds=b=>[Math.floor(Math.max(-46.95,b.getWest())*1e5)/1e5,Math.floor(Math.max(-24.1,b.getSouth())*1e5)/1e5,Math.ceil(Math.min(-46.30,b.getEast())*1e5)/1e5,Math.ceil(Math.min(-23.3,b.getNorth())*1e5)/1e5];
 
 export async function request(url, options) {
-  const response = await fetch(url,options);
-  const data = await response.json();
+  let response, data;
+  try {
+    response = await fetch(url,options);
+    data = await response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new Error('Não foi possível consultar os dados. Tente novamente.');
+  }
   if (!response.ok) throw new Error(data.error || 'Não foi possível consultar os dados.');
   return data;
 }
