@@ -6,6 +6,20 @@ vi.mock('react-leaflet',()=>({MapContainer:({children})=><div>{children}</div>,T
 import App from '../main';
 import {REAL_SAVED_ROUTES_KEY} from '../state/useRealSavedRoutes';
 
+it('abre fontes e metodologia reais sem mudar para a simulação',async()=>{
+  const user=userEvent.setup();
+  const previousScroll=HTMLElement.prototype.scrollTo;HTMLElement.prototype.scrollTo=vi.fn();
+  try {
+    render(<App real/>);
+    await user.click(screen.getByRole('button',{name:'Fontes e metodologia'}));
+    expect(screen.getByRole('heading',{name:'Fontes e metodologia'})).toBeInTheDocument();
+    expect(screen.getByText(/50%.*30%.*20%/i)).toBeInTheDocument();
+    expect(screen.getByText(/não é uma previsão/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button',{name:/voltar/i}));
+    expect(screen.getByRole('heading',{name:/um caminho melhor/i})).toBeInTheDocument();
+  } finally {HTMLElement.prototype.scrollTo=previousScroll;}
+});
+
 it('abre avisos oficiais no fluxo real sem consultar a fonte antes de abrir a central',async()=>{
   const user=userEvent.setup();
   const fetchMock=vi.fn(url=>Promise.resolve({ok:true,json:async()=>url==='/api/alerts'?{status:'available',coverage:'unknown',checkedAt:'2026-11-11T18:00:00Z',alerts:[]}:{features:[],truncated:false}}));

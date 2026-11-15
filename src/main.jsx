@@ -10,6 +10,13 @@ import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighl
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
 import Logo from "./components/Logo";
 import CityMapPanel from "./components/CityMapPanel";
+import RealCityPanel from "./components/RealCityPanel";
+import RealRouteDetails from "./components/RealRouteDetails";
+import RealAuth from "./components/RealAuth";
+import RealSources from "./components/RealSources";
+import MapLocation from "./components/MapLocation";
+import {useAuth} from "./state/useAuth";
+import {buildRouteSegments} from "./data/realRouteSegments";
 import ScenarioMarkers from "./components/ScenarioMarkers";
 import CityModeTabs from "./components/CityModeTabs";
 import { getCityEvents, illustrativeFloodArea, illustrativeStreams } from "./data/cityMap";
@@ -134,10 +141,15 @@ export default function App({real = false}) {
     [showAlert, setShowAlert] = useState(true),
     [citySelection, setCitySelection] = useState(null);
   const realData = useRealRoutes();
+  const auth = useAuth(real);
   const [realSavedRoutes,setRealSavedRoutes,realSavedError] = useRealSavedRoutes();
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [locationStatus,setLocationStatus] = useState('');
+  const [cityRain,setCityRain]=useState({status:'loading',stations:[]});
+  const [cityHistory,setCityHistory]=useState({features:[],sourceStates:{}});
   const sheetTouchStart = useRef(null);
   const sheetDragged = useRef(false);
+  const sheetHandleRef = useRef(null);
   const menuTriggerRef = useRef(null);
   const cityMarkers = useRef({});
   const mapSurfaceRef = useRef(null);
@@ -164,12 +176,21 @@ export default function App({real = false}) {
     [selectedSegment, setSelectedSegment] = useState(0),
     [centerSignal, setCenterSignal] = useState(0);
   const go = (next) => {
-    if (real && !["home", "compare", "save", "saved", "alerts"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    if (real && !["home", "compare", "save", "saved", "alerts", "city", "segments", "profile", "login", "signup", "sources"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
     setSheetOpen(true);
     setView(next);
     if (next !== 'city') setCitySelection(null);
     document.querySelector(".panel")?.scrollTo(0, 0);
     if (next === "city") window.scrollTo(0, 0);
+  };
+  const locateCityEvent = (event) => {
+    setCitySelection({event});
+    if (window.matchMedia?.('(max-width: 800px)').matches) {
+      setSheetOpen(false);
+      sheetHandleRef.current?.focus();
+    } else {
+      mapSurfaceRef.current?.scrollIntoView({block: 'center'});
+    }
   };
   const notify = (s) => {
     setToast(s);
@@ -199,6 +220,9 @@ export default function App({real = false}) {
   const comparisonAvailable = canCompareTrip(origin, destination, dataState);
   const currentEvents = getCityEvents(view === 'city' ? cityMode : 'now', reports);
   const selectedScenarioSegment = getOrderedSegments(origin !== places[0])[selectedSegment];
+  const realSegments=real && view==='segments' ? buildRouteSegments(realData.routes[realData.selected],realData.riskAvailable?realData.areas:null) : [];
+  const realSegment=realSegments[selectedSegment] || realSegments[0];
+  useEffect(()=>setSelectedSegment(0),[realData.selected,realData.routes]);
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">
@@ -280,7 +304,8 @@ export default function App({real = false}) {
               scrollWheelZoom={true}
             >
               <MapResizeObserver/>
-              {real ? <RecenterReal signal={centerSignal} routes={realData.routes}/> : <Recenter signal={centerSignal} view={view} />}
+              {!real && <Recenter signal={0} view={view} />}
+              <MapLocation request={centerSignal} onStatus={setLocationStatus}/>
               <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
               {import.meta.env.DEV ? <>
                 <TileLayer
@@ -300,8 +325,8 @@ export default function App({real = false}) {
                 maxNativeZoom={20}
                 keepBuffer={2}
               />}
-              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} routeEvents={realData.routes[realData.selected]?.floodContext?.history.events || []}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
-              {real && <><RainLayer enabled={realData.rain}/><FloodAreas period={realData.floodPeriod}/><RouteFloodHighlights route={realData.routes[realData.selected]} showMarkers={false}/></>}
+              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} visible={view!=='city' || cityMode==='history'} onSnapshot={setCityHistory} routeEvents={view==='city'?[]:(realData.routes[realData.selected]?.floodContext?.history.events || [])}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realSegment && <Polyline positions={realSegment.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:'#ec9223',weight:10,dashArray:'8 6'}}/>}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {real && <><RainLayer enabled={realData.rain} onSnapshot={setCityRain}/><FloodAreas period={realData.floodPeriod}/>{view!=='city' && <RouteFloodHighlights route={realData.routes[realData.selected]} showMarkers={false}/>}</>}
               {!real && view !== "city" && <>
               <Polygon
                 positions={zone}
@@ -388,36 +413,23 @@ export default function App({real = false}) {
                 />
               )}
             </MapContainer>
-            {real ? <div className="map-top"><div className="weather"><CloudRain size={19}/><span>Chuva por estação nas camadas</span></div><div id="flood-status" role="status" className="map-layer-status"/></div> : view !== "city" && <div className="map-top">
-              <div className="weather">
-                <CloudRain size={19} />
-                <span>
-                  {dataState === "available"
-                    ? "Chuva moderada"
-                    : dataState === "stale"
-                      ? "Chuva desatualizada"
-                      : dataState === "loading"
-                        ? "Consultando dados"
-                        : "Chuva indisponível"}
-                </span>
-                <span className="weather-time">simulação</span>
-              </div>
-            </div>}
             {real && <MapLayerControls rain={realData.rain} onRainChange={realData.setRain} water={realData.water} onWaterChange={realData.setWater} risk={realData.risk} onRiskChange={realData.setRisk} riskAvailable={realData.riskAvailable} hasRoutes={realData.routes.length>0} history={realData.history} onHistoryChange={realData.setHistory} floodPeriod={realData.floodPeriod} onFloodPeriodChange={realData.setFloodPeriod}/>}
             <div className="map-tools">
               <button
-                aria-label="Centralizar mapa"
+                aria-label="Mostrar minha localização no mapa"
                 onClick={() => setCenterSignal((n) => n + 1)}
               >
                 <LocateFixed size={19} />
               </button>
             </div>
+            <div className="map-location-status" role="status">{locationStatus}</div>
           </div>
         </section>
         <aside className="panel" id="main-content" tabIndex={-1}>
           <button
             type="button"
             className="mobile-sheet-handle"
+            ref={sheetHandleRef}
             aria-label={sheetOpen ? "Recolher painel" : "Abrir painel"}
             aria-expanded={sheetOpen}
             aria-controls="panel-content"
@@ -439,7 +451,7 @@ export default function App({real = false}) {
             onTouchCancel={() => { sheetTouchStart.current = null; sheetDragged.current = false; }}
           ><span aria-hidden="true" /></button>
           <div className="panel-inner" id="panel-content">
-            {!(real && view === 'alerts') && <ExtraScreens
+            {!(real && ['alerts','city','segments','profile','login','signup','sources'].includes(view)) && <ExtraScreens
               real={real}
               savedRoutesError={real ? realSavedError : ''}
               onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);go('home');}}
@@ -470,7 +482,10 @@ export default function App({real = false}) {
               setShowAlert={setShowAlert}
             />}
             {real && view === 'alerts' && <RealAlerts onBack={()=>go('home')}/>}
-            {view === "city" && <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={event => { setCitySelection({event}); if (window.matchMedia?.('(max-width: 800px)').matches) setSheetOpen(false); else mapSurfaceRef.current?.scrollIntoView({block: 'center'}); }} onBack={() => go("home")} />}
+            {real && view === 'sources' && <RealSources onBack={()=>go('home')}/>}
+            {real && ['profile','login','signup'].includes(view) && <RealAuth view={view} auth={auth} go={go}/>}
+            {view === "city" && (real ? <RealCityPanel mode={cityMode} onModeChange={setCityMode} rain={cityRain} history={cityHistory} onLocate={locateCityEvent} onBack={()=>go('home')}/> : <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={locateCityEvent} onBack={() => go("home")} />)}
+            {real && view==='segments' && <RealRouteDetails route={realData.routes[realData.selected]} riskAreas={realData.areas} riskAvailable={realData.riskAvailable} selectedSegment={selectedSegment} setSelectedSegment={setSelectedSegment} onBack={()=>go('compare')}/>}
             {view === "home" && (
               <>
                 <div className="eyebrow">
@@ -481,7 +496,7 @@ export default function App({real = false}) {
                   Compare rotas e conheça os riscos relacionados à chuva no seu
                   trajeto.
                 </p>
-                <button className="secondary city-entry" onClick={() => go("city")}><MapPin size={18} /> Explorar situação da cidade {real && "(simulação)"}</button>
+                <button className="secondary city-entry" onClick={() => go("city")}><MapPin size={18} /> Explorar situação da cidade</button>
                 {real ? <RealSearch data={realData} onCompare={()=>go("compare")}/> : <>
                 <div className="search-box">
                   <div className="input-row">
@@ -620,7 +635,7 @@ export default function App({real = false}) {
                 </div>
               </>
             )}
-            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")} onSave={()=>go("save")}/>}
+            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")} onSave={()=>go("save")} onDetails={()=>go('segments')}/>}
             {view === "compare" && !real && (
               <>
                 <button className="back" onClick={() => go("home")}>
@@ -735,7 +750,7 @@ export default function App({real = false}) {
                 </button>
               </>
             )}
-            {view === "explain" && (
+            {!real && view === "explain" && (
               <>
                 <button className="back" onClick={() => go("compare")}>
                   <ArrowLeft size={18} /> Voltar para rotas
@@ -865,7 +880,7 @@ export default function App({real = false}) {
               </>
             )}
           </div>
-          {real ? <RealMapLegend showRain={realData.rain} showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0} showHistory={realData.history || !!realData.routes[realData.selected]?.floodContext?.history.events.length} showFlood={!!realData.floodPeriod} showRouteContext={Object.values(realData.routes[realData.selected]?.floodContext?.areas || {}).some(area=>area.segmentIndexes.length>0)}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
+          {real ? <RealMapLegend showRain={realData.rain} showRoutes={realData.routes.length>0} showWater={realData.water} showRisk={realData.risk && realData.riskAvailable && realData.areas.length>0} showHistory={(view!=='city' || cityMode==='history') && (realData.history || (view!=='city' && !!realData.routes[realData.selected]?.floodContext?.history.events.length))} showFlood={!!realData.floodPeriod} showRouteContext={view!=='city' && Object.values(realData.routes[realData.selected]?.floodContext?.areas || {}).some(area=>area.segmentIndexes.length>0)}/> : <MapContextBar cityMode={view === "city" ? cityMode : null} />}
           <footer>
             Feito para decisões mais informadas <span>·</span> São Paulo, SP
           </footer>

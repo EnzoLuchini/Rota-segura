@@ -3,6 +3,7 @@ import {GeoJSON, ImageOverlay, Polyline, Circle, Marker, Popup, useMap, useMapEv
 import {historyIcon,historyLabel,historyGroupIcon,groupHistoryFeatures,mergeHistoryFeatures,historyKey,HistoryCard} from './realMapPresentation';
 import {createMapRequestCache} from './mapRequestCache';
 import {bufferBox, findCoverage} from './mapViewportCache';
+import {visibleHistory} from '../data/citySnapshot';
 
 const mapCache=createMapRequestCache();
 const cachedMapRequest=url=>mapCache.get(url,()=>request(url));
@@ -49,8 +50,9 @@ export function FitRoutes({routes}) {
   return null;
 }
 
-export function HistoricalOccurrences({enabled,routeEvents=[]}) {
+export function HistoricalOccurrences({enabled,routeEvents=[],onSnapshot,visible=true}) {
   const [data,setData]=useState(null), [status,setStatus]=useState('');
+  const [visibleBounds,setVisibleBounds]=useState(null), [sourceStates,setSourceStates]=useState({});
   const [zoom,setZoom]=useState(null);
   const [reference,setReference]=useState(null);
   const sequence=useRef(0);
@@ -61,17 +63,20 @@ export function HistoricalOccurrences({enabled,routeEvents=[]}) {
     setZoom(map.getZoom());
     if (!enabled) return;
     const id=++sequence.current, b=map.getBounds();
+    const bounds=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+    setVisibleBounds(previous=>previous && previous.every((value,index)=>value===bounds[index]) ? previous : bounds);
     const box=roundedBounds(b);
-    if(box[2]-box[0]>0.3 || box[3]-box[1]>0.3 || box[2]<=box[0] || box[3]<=box[1]) {setData(null);setStatus('Aproxime o mapa de São Paulo para ver os registros históricos.');return;}
+    if(box[2]-box[0]>0.3 || box[3]-box[1]>0.3 || box[2]<=box[0] || box[3]<=box[1]) {setData(null);setSourceStates({alagamento:'zoom',inundacao:'zoom'});setStatus('Aproxime o mapa de São Paulo para ver os registros históricos.');return;}
     const cached=findCoverage(coverage.current,box,null,Date.now());
-    if(cached){setData(cached.data);setStatus(cached.data.features.length?'':'Nenhum registro disponível nesta área da camada.');return;}
+    if(cached){setData(cached.data);setSourceStates(cached.data.sourceStates);setStatus(cached.data.features.length?'':'Nenhum registro disponível nesta área da camada.');return;}
     const expanded=bufferBox(box);
-    setStatus('Carregando registros históricos…');
-    Promise.allSettled(['alagamento','inundacao'].map(kind=>cachedMapRequest(`/api/occurrences?bbox=${expanded.join(',')}&kind=${kind}`))).then(results=>{if(id!==sequence.current)return;const available=results.flatMap((result,index)=>result.status==='fulfilled'?[{...result.value,features:result.value.features.map(feature=>({...feature,kind:['alagamento','inundacao'][index]}))}]:[]);if(!available.length){setData(null);setStatus('Registros históricos indisponíveis no momento.');return;}const features=available.flatMap(value=>value.features),next={features};if(available.length===2 && !available.some(value=>value.truncated))coverage.current=[{box:expanded,data:next,time:Date.now()},...coverage.current].slice(0,5);setData(next);setStatus(available.length<2 || available.some(value=>value.truncated)?'Registros parcialmente exibidos; uma fonte falhou ou limitou os dados.':features.length?'':'Nenhum registro disponível nesta área da camada.');});
+    setData(null);setSourceStates({alagamento:'loading',inundacao:'loading'});setStatus('Carregando registros históricos…');
+    Promise.allSettled(['alagamento','inundacao'].map(kind=>cachedMapRequest(`/api/occurrences?bbox=${expanded.join(',')}&kind=${kind}`))).then(results=>{if(id!==sequence.current)return;const kinds=['alagamento','inundacao'], states=Object.fromEntries(results.map((result,index)=>[kinds[index],result.status==='rejected'?'unavailable':result.value.truncated?'partial':'available']));setSourceStates(states);const available=results.flatMap((result,index)=>result.status==='fulfilled'?[{...result.value,features:result.value.features.map(feature=>({...feature,kind:kinds[index]}))}]:[]);if(!available.length){setData(null);setStatus('Registros históricos indisponíveis no momento.');return;}const features=available.flatMap(value=>value.features),next={features,sourceStates:states,queriedAt:new Date().toISOString()};if(available.length===2 && !available.some(value=>value.truncated))coverage.current=[{box:expanded,data:next,time:Date.now()},...coverage.current].slice(0,5);setData(next);setStatus(available.length<2 || available.some(value=>value.truncated)?'Registros parcialmente exibidos; uma fonte falhou ou limitou os dados.':features.length?'':'Nenhum registro disponível nesta área da camada.');});
   }
-  useEffect(()=>{if(map && enabled)load();else {sequence.current++;setData(null);setStatus('');setReference(null);}return()=>{sequence.current++;};},[map,enabled]);
+  useEffect(()=>{if(map && enabled)load();else {sequence.current++;setData(null);setStatus('');setReference(null);}return()=>{sequence.current++;};},[enabled]);
   useEffect(()=>{const node=document.getElementById('history-status');if(node)node.textContent=status;},[status]);
-  if(!map)return null;
+  useEffect(()=>{onSnapshot?.({features:enabled?visibleHistory(data?.features || [],visibleBounds):[],status:enabled?status:'Camada histórica desativada.',sourceStates,queriedAt:data?.queriedAt || null});},[enabled,data,status,sourceStates,visibleBounds,onSnapshot]);
+  if(!map || !visible)return null;
   const features=mergeHistoryFeatures(enabled ? (data?.features || []) : [],routeEvents);
   if(!features.length)return null;
   const groups=groupHistoryFeatures(features,([lon,lat])=>map.project([lat,lon],zoom ?? map.getZoom()));

@@ -25,13 +25,14 @@ export function rainForRoute(route, data, now=Date.now()) {
   });
   if (!Number.isFinite(queriedAt) || queriedAt>now+300000 || now-queriedAt>=60000 || !valid.length) return {status:'unavailable',maxMm:null,stations:[],queriedAt:data?.queriedAt || null,validUntil:null};
   const routeLength=length(route,{units:'kilometers'}), samples=[];
-  for(let km=0;km<routeLength;km+=SAMPLE_KM) samples.push(along(route,km,{units:'kilometers'}));
-  samples.push(along(route,routeLength,{units:'kilometers'}));
-  const used=new Map();let uncovered=0;
+  for(let km=0;km<routeLength;km+=SAMPLE_KM) samples.push({distanceKm:km,point:along(route,km,{units:'kilometers'})});
+  samples.push({distanceKm:routeLength,point:along(route,routeLength,{units:'kilometers'})});
+  const used=new Map(), associations=[];let uncovered=0;
   for(const sample of samples){
     let nearest=null, nearestDistance=Infinity;
-    for(const station of valid){const d=distance(sample,point(station.coordinates),{units:'kilometers'});if(d<nearestDistance){nearest=station;nearestDistance=d;}}
-    if(!nearest || nearestDistance>MAX_DISTANCE){uncovered++;continue;}
+    for(const station of valid){const d=distance(sample.point,point(station.coordinates),{units:'kilometers'});if(d<nearestDistance){nearest=station;nearestDistance=d;}}
+    if(!nearest || nearestDistance>MAX_DISTANCE){uncovered++;associations.push({distanceKm:sample.distanceKm,stationId:null,stationDistanceMeters:null});continue;}
+    associations.push({distanceKm:sample.distanceKm,stationId:nearest.id,stationDistanceMeters:nearestDistance*1000});
     const previous=used.get(nearest.id);
     used.set(nearest.id,{...nearest,maxDistanceMeters:Math.max(previous?.maxDistanceMeters || 0,nearestDistance*1000)});
   }
@@ -39,7 +40,7 @@ export function rainForRoute(route, data, now=Date.now()) {
   const status=data.partial || uncovered ? (stations.length?'partial':'unavailable') : 'available';
   const readingsValidUntil=stations.length?Math.min(...stations.map(s=>Date.parse(s.end)+MAX_AGE)):null;
   const validUntil=readingsValidUntil===null?null:new Date(Math.min(queriedAt+60000,readingsValidUntil)).toISOString();
-  return {status,maxMm:stations.length?Math.max(...stations.map(s=>s.value)):null,stations,queriedAt:data.queriedAt,validUntil,readingsValidUntil:readingsValidUntil===null?null:new Date(readingsValidUntil).toISOString(),uncoveredSamples:uncovered,totalSamples:samples.length};
+  return {status,maxMm:stations.length?Math.max(...stations.map(s=>s.value)):null,stations,samples:associations,queriedAt:data.queriedAt,validUntil,readingsValidUntil:readingsValidUntil===null?null:new Date(readingsValidUntil).toISOString(),uncoveredSamples:uncovered,totalSamples:samples.length};
 }
 
 export function scoreRoutes(items) {

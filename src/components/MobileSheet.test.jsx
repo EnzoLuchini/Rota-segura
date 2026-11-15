@@ -18,3 +18,18 @@ it('permite recolher e abrir o painel por botão e gesto',async()=>{
   fireEvent.touchEnd(handle,{changedTouches:[{clientY:600}]});
   expect(screen.getByRole('button',{name:'Abrir painel'})).toHaveAttribute('aria-expanded','false');
 });
+
+it('mantém o foco visível ao localizar uma ocorrência no mapa móvel',async()=>{
+  const user=userEvent.setup();
+  vi.stubGlobal('matchMedia',vi.fn().mockReturnValue({matches:true}));
+  window.history.replaceState({},'', '/simulacao?view=city');
+  try {
+    render(<App/>);
+    await user.click(screen.getByRole('button',{name:'Alagamento em Pinheiros'}));
+    await user.click(screen.getByRole('button',{name:'Ver Alagamento em Pinheiros no mapa'}));
+    expect(screen.getByRole('button',{name:'Abrir painel'})).toHaveFocus();
+  } finally {
+    window.history.replaceState({},'', '/');
+    vi.unstubAllGlobals();
+  }
+});

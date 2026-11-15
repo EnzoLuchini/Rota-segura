@@ -6,6 +6,19 @@ const now=Date.parse('2026-11-12T15:00:00Z');
 const route={type:'Feature',geometry:{type:'LineString',coordinates:[[-46.65,-23.55],[-46.64,-23.55]]}};
 const station=(id,lon,value,end='2026-11-12T14:40:00Z')=>({id,name:id,coordinates:[lon,-23.55],value,start:'2026-11-12T14:00:00Z',end,owner:'SIBH'});
 
+test('preserva a posição das amostras e a estação associada sem mudar o indicador global',()=>{
+ const r=rainForRoute(route,{stations:[station('a',-46.65,3)],partial:false,queriedAt:'2026-11-12T15:00:00Z'},now);
+ assert.equal(r.samples[0].distanceKm,0);
+ assert.equal(r.samples[0].stationId,'a');
+ assert.ok(Number.isFinite(r.samples[0].stationDistanceMeters));
+ assert.equal(r.samples.length,r.totalSamples);
+ assert.equal(r.maxMm,3);
+ const long={type:'Feature',geometry:{type:'LineString',coordinates:[[-46.65,-23.55],[-46.60,-23.55]]}};
+ const partial=rainForRoute(long,{stations:[station('a',-46.65,3)],partial:false,queriedAt:'2026-11-12T15:00:00Z'},now);
+ assert.ok(partial.samples.some(sample=>sample.stationId===null));
+ assert.equal(partial.uncoveredSamples,partial.samples.filter(sample=>sample.stationId===null).length);
+});
+
 test('associa estações válidas próximas ao longo do trajeto e mantém o máximo e a validade',()=>{
   const r=rainForRoute(route,{stations:[station('a',-46.65,3),station('b',-46.64,12)],partial:false,queriedAt:'2026-11-12T15:00:00Z'},now);
   assert.equal(r.status,'available'); assert.equal(r.maxMm,12);
