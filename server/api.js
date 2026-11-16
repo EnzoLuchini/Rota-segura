@@ -103,14 +103,11 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
           try {floodContext=analyzeFloodContext(item.route,{history,areas:floodData});} catch {floodContext=analyzeFloodContext(item.route,{history:null,areas:{5:null}});}
           let rain;
           try {rain=rainForRoute(item.route,rainData);} catch {rain={status:'unavailable',maxMm:null,stations:[],queriedAt:rainData?.queriedAt || null,validUntil:null};}
-          return {geometry:item.route.geometry,summary:item.route.properties?.summary,exposureMeters:item.exposureMeters,evidence:item.evidence || [],floodContext,historyCount:floodContext.history.status==='available'?floodContext.history.events.length:null,rain};
+          return {geometry:item.route.geometry,summary:item.route.properties?.summary,exposureMeters:item.exposureMeters,evidence:item.evidence || [],floodContext,historyCount:floodContext.history.status!=='unavailable'?floodContext.history.events.length:null,rain};
         });
         const rainStatus=!rainData?'unavailable':computed.every(r=>r.rain.status==='available')?'available':computed.some(r=>r.rain.status!=='unavailable')?'partial':'unavailable';
-        const complete=areas!==null && historyComplete && rainStatus==='available' && computed.every(r=>r.floodContext.history.status==='available');
-        const score=scoreRoutes(computed.map(r=>({exposureMeters:r.exposureMeters,historyCount:complete?r.historyCount:null,rainMm:complete?r.rain.maxMm:null})));
-        const recommendationReason=areas===null?'risk_unavailable':valid.length===1?'single_route':score.reason;
-        const recommended=complete?score.recommended:-1;
-        return send(res,200,{routes:computed.map((item,i)=>({...item,score:complete?score.scores[i]:null,recommended:i===recommended})),riskAvailable:areas!==null,sources:{risk:{status:areas===null?'unavailable':'available'},history:historyStatus,rain:{status:rainStatus,queriedAt:rainData?.queriedAt || null}},recommendationReason,riskAreas:areas || [],excludedOutside:routes.length-valid.length});
+        const score=scoreRoutes(computed.map(r=>({exposureMeters:r.exposureMeters,historyCount:r.historyCount,rainMm:r.rain.maxMm,duration:r.summary?.duration})));
+        return send(res,200,{routes:computed.map((item,i)=>({...item,score:score.scores[i],recommended:i===score.recommended})),riskAvailable:areas!==null,sourcesUsed:score.sourcesUsed,sources:{risk:{status:areas===null?'unavailable':'available'},history:historyStatus,rain:{status:rainStatus,queriedAt:rainData?.queriedAt || null}},recommendationReason:score.reason,riskAreas:areas || [],excludedOutside:routes.length-valid.length});
       }
       send(res,404,{error:'Serviço não encontrado.'});
     } catch { send(res,502,{error:'Não foi possível consultar os serviços de dados. Tente novamente.'}); }

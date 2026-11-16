@@ -48,8 +48,22 @@ test('normaliza os três indicadores e recomenda a menor pontuação única',()=
  assert.deepEqual(r.scores,[50,50]);assert.equal(r.recommended,-1);assert.equal(r.reason,'score_tie');
  const s=scoreRoutes([{exposureMeters:0,historyCount:0,rainMm:8},{exposureMeters:100,historyCount:2,rainMm:4}]);
  assert.deepEqual(s.scores,[20,80]);assert.equal(s.recommended,0);assert.equal(s.reason,'lowest_combined_score');
- assert.equal(scoreRoutes([{exposureMeters:0,historyCount:null,rainMm:1},{exposureMeters:3,historyCount:0,rainMm:2}]).recommended,-1);
+ const partial=scoreRoutes([{exposureMeters:0,historyCount:null,rainMm:1,duration:10},{exposureMeters:3,historyCount:0,rainMm:2,duration:20}]);
+ assert.equal(partial.recommended,0);assert.deepEqual(partial.sourcesUsed,['exposureMeters','rainMm']);
+ assert.equal(scoreRoutes([{exposureMeters:null,historyCount:null,rainMm:null},{exposureMeters:null,historyCount:null,rainMm:null}]).reason,'sources_incomplete');
  assert.equal(scoreRoutes([{exposureMeters:0,historyCount:0,rainMm:0}]).reason,'single_route');
+});
+
+test('usa tempo como desempate quando há indicadores disponíveis',()=>{
+ const result=scoreRoutes([{exposureMeters:0,historyCount:null,rainMm:null,duration:20},{exposureMeters:0,historyCount:null,rainMm:null,duration:10}]);
+ assert.equal(result.recommended,1);assert.equal(result.reason,'fastest_tie');
+});
+
+test('não compara indicador indisponível para uma alternativa e não inventa valores',()=>{
+ const result=scoreRoutes([{exposureMeters:4,historyCount:null,rainMm:10,duration:20},{exposureMeters:8,historyCount:null,rainMm:null,duration:10}]);
+ assert.deepEqual(result.sourcesUsed,['exposureMeters']);assert.deepEqual(result.scores,[0,100]);assert.equal(result.recommended,0);
+ const missing=scoreRoutes([{exposureMeters:null,historyCount:null,rainMm:1},{exposureMeters:null,historyCount:2,rainMm:null}]);
+ assert.equal(missing.recommended,-1);assert.deepEqual(missing.sourcesUsed,[]);
 });
 
 

@@ -14,10 +14,18 @@ it('explica pontuação e mostra evidências e período das estações',()=>{
  expect(screen.getByText(/50%.*30%.*20%/i)).toBeInTheDocument();
  expect(screen.getAllByText(/Estação Centro/i).length).toBeGreaterThan(0);
 });
+it('apresenta recomendação com fontes parciais e informa suas limitações',()=>{
+ const d=data();d.sources={risk:{status:'available'},history:{alagamento:'available',inundacao:'available'},rain:{status:'partial'}};
+ d.routes.forEach(r=>{r.rain={...r.rain,status:'partial',uncoveredSamples:2,totalSamples:10};});
+ render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+ expect(screen.getByText(/menor pontuação relativa nesta consulta/i)).toBeInTheDocument();
+ expect(screen.getByText(/chuva.*parcial/i,{selector:'li'})).toBeInTheDocument();
+ expect(screen.queryByText(/não é possível recomendar.*fontes/i)).not.toBeInTheDocument();
+});
 it('explica quando fontes incompletas impedem a recomendação',()=>{
  const d=data();d.recommendationReason='sources_incomplete';d.routes.forEach(r=>{r.score=null;r.recommended=false;r.rain={status:'unavailable',maxMm:null,stations:[]};});
  render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
- expect(screen.getByText(/não é possível recomendar.*fontes/i)).toBeInTheDocument();
+ expect(screen.getByText(/não é possível recomendar.*fonte/i)).toBeInTheDocument();
  expect(screen.getAllByText(/chuva indisponível/i).length).toBeGreaterThan(0);
 });
 
@@ -32,6 +40,29 @@ it('retira recomendação e pontuação quando as medições de chuva envelhecem
     expect(screen.getByText(/medições de chuva venceram/i)).toBeInTheDocument();
     expect(screen.getAllByText(/pontuação indisponível/i)).toHaveLength(2);
   } finally {vi.useRealTimers();}
+});
+
+it('recalcula com outras fontes quando a chuva vence',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-12T15:00:00Z'));
+ try{
+  const d=data();d.sourcesUsed=['exposureMeters','historyCount','rainMm'];d.routes.forEach(route=>route.rain={...route.rain,readingsValidUntil:'2026-11-12T15:00:01Z'});
+  render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+  await act(async()=>{vi.advanceTimersByTime(1000);});
+  expect(screen.getByText(/comparação foi atualizada sem chuva/i)).toBeInTheDocument();
+  expect(screen.getByText(/fontes usadas: áreas mapeadas, histórico/i)).toBeInTheDocument();
+  expect(screen.queryByText(/pontuação indisponível/i)).not.toBeInTheDocument();
+ }finally{vi.useRealTimers();}
+});
+
+it('deixa de recomendar quando a última fonte disponível vence',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-12T15:00:00Z'));
+ try{
+  const d=data();d.sourcesUsed=['rainMm'];d.routes.forEach(route=>{route.exposureMeters=null;route.historyCount=null;route.rain={...route.rain,readingsValidUntil:'2026-11-12T15:00:01Z'};});
+  render(<RealComparison data={d} onBack={()=>{}} onSave={()=>{}}/>);
+  await act(async()=>{vi.advanceTimersByTime(1000);});
+  expect(screen.getByText(/não é possível recomendar.*nenhuma fonte/i)).toBeInTheDocument();
+  expect(screen.queryByText(/menor pontuação relativa nesta consulta/i)).not.toBeInTheDocument();
+ }finally{vi.useRealTimers();}
 });
 
 it('mostra diferenças dos valores reais que afetam a pontuação',()=>{

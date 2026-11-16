@@ -1,4 +1,5 @@
 import {along, distance, length, point} from '@turf/turf';
+export {scoreRoutes} from '../src/data/scoreRoutes.js';
 
 const MAX_AGE=90*60000, MAX_DISTANCE=3, SAMPLE_KM=0.25;
 
@@ -41,15 +42,4 @@ export function rainForRoute(route, data, now=Date.now()) {
   const readingsValidUntil=stations.length?Math.min(...stations.map(s=>Date.parse(s.end)+MAX_AGE)):null;
   const validUntil=readingsValidUntil===null?null:new Date(Math.min(queriedAt+60000,readingsValidUntil)).toISOString();
   return {status,maxMm:stations.length?Math.max(...stations.map(s=>s.value)):null,stations,samples:associations,queriedAt:data.queriedAt,validUntil,readingsValidUntil:readingsValidUntil===null?null:new Date(readingsValidUntil).toISOString(),uncoveredSamples:uncovered,totalSamples:samples.length};
-}
-
-export function scoreRoutes(items) {
-  if(items.length===0) return {scores:[],recommended:-1,reason:'no_routes'};
-  if(items.length===1) return {scores:[null],recommended:-1,reason:'single_route'};
-  if(items.some(x=>[x.exposureMeters,x.historyCount,x.rainMm].some(v=>!Number.isFinite(v) || v<0))) return {scores:items.map(()=>null),recommended:-1,reason:'sources_incomplete'};
-  const keys=['exposureMeters','historyCount','rainMm'], weights=[0.5,0.3,0.2];
-  const bounds=keys.map(k=>[Math.min(...items.map(x=>x[k])),Math.max(...items.map(x=>x[k]))]);
-  const scores=items.map(item=>100*keys.reduce((sum,key,i)=>sum+weights[i]*(bounds[i][1]===bounds[i][0]?0:(item[key]-bounds[i][0])/(bounds[i][1]-bounds[i][0])),0));
-  const order=scores.map((value,index)=>({value,index})).sort((a,b)=>a.value-b.value);
-  return order[1].value-order[0].value<1?{scores,recommended:-1,reason:'score_tie'}:{scores,recommended:order[0].index,reason:'lowest_combined_score'};
 }
