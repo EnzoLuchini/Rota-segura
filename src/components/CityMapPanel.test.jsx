@@ -4,13 +4,13 @@ import userEvent from '@testing-library/user-event';
 import {expect, it, vi} from 'vitest';
 import CityMapPanel from './CityMapPanel';
 
-it('alterna entre ocorrências atuais e registros históricos e permite consultar detalhes', async () => {
+it('não apresenta o seletor de período e mantém detalhes históricos disponíveis', async () => {
   const user = userEvent.setup();
   const onModeChange = vi.fn();
   const {rerender} = render(<CityMapPanel mode="now" onModeChange={onModeChange} onBack={() => {}} />);
   expect(screen.getByText(/dados fictícios/i)).toBeInTheDocument();
-  await user.click(screen.getByRole('button', {name: 'Histórico'}));
-  expect(onModeChange).toHaveBeenCalledWith('history');
+  expect(screen.queryByRole('button', {name: 'Histórico'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', {name: 'Agora'})).not.toBeInTheDocument();
   rerender(<CityMapPanel mode="history" onModeChange={onModeChange} onBack={() => {}} />);
   expect(screen.getByText(/não significa que há alagamento agora/i)).toBeInTheDocument();
   await user.click(screen.getByRole('button', {name: /Pinheiros.*registros/i}));

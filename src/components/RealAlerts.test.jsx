@@ -25,6 +25,16 @@ it('diferencia lista vazia de indisponibilidade',async()=>{
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent(/indisponíveis/i));
 });
 
+it('identifica avisos vigentes que intersectam rotas salvas',async()=>{
+  const polygon={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.72,-23.58],[-46.64,-23.58],[-46.64,-23.54],[-46.72,-23.54],[-46.72,-23.58]]]}};
+  const routes=[{id:'casa',name:'Casa',geometry:{type:'LineString',coordinates:[[-46.7,-23.56],[-46.65,-23.56]]}},{id:'fora',name:'Outra',geometry:{type:'LineString',coordinates:[[-46.8,-23.6],[-46.79,-23.6]]}}];
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'available',coverage:'unknown',checkedAt:new Date().toISOString(),alerts:[{...item,areas:[polygon]}]})}));
+  const user=userEvent.setup();render(<RealAlerts onBack={()=>{}} routes={routes}/>);
+  expect(await screen.findByText(/rota salva: Casa/i)).toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:/aviso de tempestade/i}));
+  expect(screen.getByText(/rota salva: Casa/i)).toBeInTheDocument();
+});
+
 it('permite tentar novamente após falha da fonte',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockRejectedValueOnce(Error('offline')).mockResolvedValueOnce({ok:true,json:async()=>({status:'available',coverage:'unknown',checkedAt:'2026-11-11T18:00:00Z',alerts:[]})}));
   const user=userEvent.setup();render(<RealAlerts onBack={()=>{}}/>);

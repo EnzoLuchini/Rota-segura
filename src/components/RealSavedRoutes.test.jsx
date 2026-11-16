@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {cleanup,render,screen} from '@testing-library/react';
+import {cleanup,render,screen,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
 import ExtraScreens from '../ExtraScreens';
@@ -8,7 +8,7 @@ import {useRealSavedRoutes,REAL_SAVED_ROUTES_KEY} from '../state/useRealSavedRou
 const origin={label:'Paulista',coordinates:[-46.65,-23.56]},destination={label:'Pinheiros',coordinates:[-46.70,-23.57]};
 const useRoute=vi.fn();
 function Example({initial='save',travelMode='driving'}){const [view,go]=useState(initial);const [routes,setRoutes,error]=useRealSavedRoutes();return <ExtraScreens view={view} go={go} real realTravelMode={travelMode} origin={origin} destination={destination} savedRoutes={routes} setSavedRoutes={setRoutes} savedRoutesError={error} onUseRoute={useRoute}/>;}
-afterEach(()=>{cleanup();localStorage.removeItem(REAL_SAVED_ROUTES_KEY);vi.restoreAllMocks();useRoute.mockClear();});
+afterEach(()=>{cleanup();localStorage.removeItem(REAL_SAVED_ROUTES_KEY);vi.restoreAllMocks();vi.unstubAllGlobals();useRoute.mockClear();});
 
 it('salva pontos reais, edita e reutiliza após recarregar, sem rotas fictícias',async()=>{
   const user=userEvent.setup();
@@ -43,4 +43,22 @@ it('preserva o modo de caminhada ao salvar e consultar novamente',async()=>{
   await user.click(screen.getByRole('button',{name:/salvar neste navegador/i}));
   await user.click(screen.getByRole('button',{name:/consultar novamente/i}));
   expect(useRoute).toHaveBeenCalledWith(expect.objectContaining({mode:'A pé'}));
+});
+
+it('mostra horários e modal da rota salva',()=>{
+ localStorage.setItem(REAL_SAVED_ROUTES_KEY,JSON.stringify([{id:'1',name:'Casa',origin,destination,mode:'A pé',days:'Todos os dias',outbound:'08:00',returnTime:'18:00'}]));
+ render(<Example initial="saved"/>);
+ expect(screen.getByText(/andando/i)).toBeInTheDocument();
+ expect(screen.getByText(/ida 08:00.*volta 18:00/i)).toBeInTheDocument();
+});
+
+it('mostra avisos vigentes compatíveis com a rota cadastrada',async()=>{
+ const geometry={type:'LineString',coordinates:[[-46.7,-23.56],[-46.65,-23.56]]};
+ const polygon={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.72,-23.58],[-46.64,-23.58],[-46.64,-23.54],[-46.72,-23.54],[-46.72,-23.58]]]}};
+ localStorage.setItem(REAL_SAVED_ROUTES_KEY,JSON.stringify([{id:'1',name:'Casa',origin,destination,geometry,mode:'Carro',days:'Todos os dias',outbound:'08:00',returnTime:'18:00'}]));
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'partial',alerts:[{areas:[polygon],start:new Date(Date.now()-10000).toISOString(),end:new Date(Date.now()+60000).toISOString()}]})}));
+ render(<Example initial="saved"/>);
+ const card=screen.getByText('Casa').closest('.local-card');
+ expect(await within(card).findByText(/1 aviso meteorológico vigente abrange esta rota/i)).toBeInTheDocument();
+ expect(within(card).getByText(/consulta parcial/i)).toBeInTheDocument();
 });

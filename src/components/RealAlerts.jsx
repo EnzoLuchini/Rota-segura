@@ -1,10 +1,11 @@
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {ArrowLeft,ShieldAlert} from 'lucide-react';
+import {routeAlertMatch,routeAlertSummary} from './routeAlertMatching';
 
 const date=value=>new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(new Date(value));
 const severity=value=>({Extreme:'Extrema',Severe:'Severa',Moderate:'Moderada',Minor:'Baixa',Unknown:'Não informada'})[value] || value;
 
-export default function RealAlerts({onBack,initialAlert=null}){
+export default function RealAlerts({onBack,initialAlert=null,routes=[]}){
   const [data,setData]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(initialAlert),[clock,setClock]=useState(Date.now()),[attempt,setAttempt]=useState(0);
   const heading=useRef(null), moveFocus=useRef(false);
   useLayoutEffect(()=>{
@@ -27,6 +28,8 @@ export default function RealAlerts({onBack,initialAlert=null}){
   },[attempt]);
   const current=(data?.alerts || []).filter(item=>Date.parse(item.start)<=clock && clock<Date.parse(item.end));
   const detail=current.find(item=>item.id===selected);
+  const routeNames=alert=>routes.filter(route=>routeAlertMatch(route.geometry,alert)===true).map(route=>route.name);
+  const missingGeometry=routes.some(route=>routeAlertSummary(route,[]).status==='unknown');
   return <>
     <button className="back" onClick={detail?()=>selectAlert(null):onBack}><ArrowLeft size={18}/> {detail?'Voltar aos avisos':'Voltar'}</button>
     <span className="overline">Informações oficiais</span><h1 ref={heading} tabIndex={-1}>{detail?'Detalhes do aviso':'Avisos meteorológicos'}</h1>
@@ -37,10 +40,11 @@ export default function RealAlerts({onBack,initialAlert=null}){
     {data && <>
       <p className="footnote">Consulta em {date(data.checkedAt)} (horário de Brasília). A cobertura do feed não foi confirmada; consulte também o INMET.</p>
       {data.status==='partial' && <p className="selection-warning" role="status">Consulta parcial: alguns avisos não puderam ser verificados ou faltam versões anteriores.</p>}
-      {detail ? <article className="local-card"><strong>{detail.headline}</strong><p>Severidade: {severity(detail.severity)}</p><p>Início: {date(detail.start)} · Fim: {date(detail.end)} (horário de Brasília)</p><p>{detail.description}</p><p>Fonte: INMET</p><a href={detail.url} target="_blank" rel="noopener noreferrer">Abrir aviso oficial</a></article> : <>
-        {current.length===0 ? <div className="empty-state">Nenhum aviso vigente encontrado entre os itens consultados. Isso não significa ausência de risco ou de outros avisos.</div> : current.map((item,i)=><button className="alert-card" key={`${item.id}-${i}`} onClick={()=>selectAlert(item.id)}><span className="alert-icon"><ShieldAlert size={20}/></span><span><strong>{item.headline}</strong><small>INMET · {severity(item.severity)} · até {date(item.end)}</small></span></button>)}
+      {missingGeometry && <p className="footnote">Algumas rotas salvas não têm geometria. Consulte e salve essas rotas novamente para relacioná-las aos avisos.</p>}
+      {detail ? <article className="local-card"><strong>{detail.headline}</strong><p>Severidade: {severity(detail.severity)}</p><p>Início: {date(detail.start)} · Fim: {date(detail.end)} (horário de Brasília)</p>{routeNames(detail).length>0 && <p>Rota{routeNames(detail).length>1?'s salvas':' salva'}: {routeNames(detail).join(', ')}</p>}<p>{detail.description}</p><p>Fonte: INMET</p><a href={detail.url} target="_blank" rel="noopener noreferrer">Abrir aviso oficial</a></article> : <>
+        {current.length===0 ? <div className="empty-state">Nenhum aviso vigente encontrado entre os itens consultados. Isso não significa ausência de risco ou de outros avisos.</div> : current.map((item,i)=><button className="alert-card" key={`${item.id}-${i}`} onClick={()=>selectAlert(item.id)}><span className="alert-icon"><ShieldAlert size={20}/></span><span><strong>{item.headline}</strong><small>INMET · {severity(item.severity)} · até {date(item.end)}</small>{routeNames(item).length>0 && <small>Rota{routeNames(item).length>1?'s salvas':' salva'}: {routeNames(item).join(', ')}</small>}</span></button>)}
       </>}
-      <p className="footnote">Os avisos são meteorológicos, podem abranger uma região maior e não substituem orientações da Defesa Civil. Não há notificações automáticas.</p>
+      <p className="footnote">Os avisos são meteorológicos, podem abranger uma região maior e não substituem orientações da Defesa Civil. As notificações dependem da ativação e configuração no dispositivo.</p>
     </>}
   </>;
 }

@@ -33,3 +33,15 @@ it('mantém o foco visível ao localizar uma ocorrência no mapa móvel',async()
     vi.unstubAllGlobals();
   }
 });
+
+it('mostra alertas como página sem a aba de puxar e recupera a aba ao voltar ao mapa',async()=>{
+  const user=userEvent.setup();render(<App real/>);
+  document.querySelector('.panel').scrollTo=vi.fn();
+  await user.click(screen.getByRole('button',{name:'Alertas'}));
+  expect(screen.getByRole('heading',{name:'Avisos meteorológicos'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/recolher painel|abrir painel/i})).not.toBeInTheDocument();
+  expect(document.querySelector('.workspace')).toHaveClass('page-view');
+  await user.click(screen.getByRole('button',{name:'Voltar'}));
+  expect(screen.getByRole('button',{name:'Recolher painel'})).toBeInTheDocument();
+  expect(document.querySelector('.workspace')).not.toHaveClass('page-view');
+});

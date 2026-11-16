@@ -16,3 +16,12 @@ it('identifica falha de uma fonte histórica sem afirmar ausência de risco',()=
  expect(screen.getByText(/inundação: indisponível/i)).toBeInTheDocument();
  expect(screen.getByText(/não representa alagamento atual/i)).toBeInTheDocument();
 });
+
+it('mostra dados atuais e históricos sem seletor de período',()=>{
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'available',checkedAt:new Date().toISOString(),alerts:[]})}));
+ render(<RealCityPanel onBack={()=>{}} rain={{status:'unavailable'}} history={{features:[],sourceStates:{alagamento:'available',inundacao:'unavailable'}}}/>);
+ expect(screen.getByText(/chuva observada indisponível/i)).toBeInTheDocument();
+ expect(screen.getByText(/não representa alagamento atual/i)).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Agora'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Histórico'})).not.toBeInTheDocument();
+});

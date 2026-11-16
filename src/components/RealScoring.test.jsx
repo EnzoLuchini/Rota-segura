@@ -14,6 +14,12 @@ it('explica pontuação e mostra evidências e período das estações',()=>{
  expect(screen.getByText(/50%.*30%.*20%/i)).toBeInTheDocument();
  expect(screen.getAllByText(/Estação Centro/i).length).toBeGreaterThan(0);
 });
+it('permite salvar explicitamente a rota a partir da comparação',async()=>{
+ const save=vi.fn();render(<RealComparison data={data()} onBack={()=>{}} onSave={save}/>);
+ expect(save).not.toHaveBeenCalled();
+ await (await import('@testing-library/user-event')).default.setup().click(screen.getByRole('button',{name:/salvar como rota frequente/i}));
+ expect(save).toHaveBeenCalledTimes(1);
+});
 it('apresenta recomendação com fontes parciais e informa suas limitações',()=>{
  const d=data();d.sources={risk:{status:'available'},history:{alagamento:'available',inundacao:'available'},rain:{status:'partial'}};
  d.routes.forEach(r=>{r.rain={...r.rain,status:'partial',uncoveredSamples:2,totalSamples:10};});

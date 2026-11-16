@@ -77,6 +77,10 @@
   .header .mobile-menu{margin-left:auto}
   .workspace{position:relative;display:block;flex:1;min-height:0;height:auto;overflow:hidden;--sheet-height: min(64%, 520px)}
   .workspace.sheet-closed{--sheet-height:64px}
+  .workspace.page-view>.map-area{display:none}
+  .workspace.page-view>.panel{height:100%;border-radius:0;box-shadow:none}
+  .workspace.page-view .panel>.map-context{display:none}
+  .workspace.page-view .panel-inner{padding-top:24px}
   .workspace>.map-area{position:absolute;inset:0;height:100%;width:100%;z-index:0}
   .workspace .map-surface{height:100%;width:100%}
   .workspace .map-surface .leaflet-bottom{bottom:var(--sheet-height);transition:bottom .22s ease}

@@ -7,10 +7,12 @@ import {
   shouldShowScenarioAlert,
 } from "./state/prototypeStorage";
 import { retainEditIdForView } from "./state/routeEditing";
+import {useSavedRouteAlerts} from './components/useSavedRouteAlerts';
 
 export default function ExtraScreens({
   real = false,
   realRouteGeometry,
+  realRouteSummary,
   realTravelMode = 'driving',
   pushNotifications,
   savedRoutesError = '',
@@ -47,6 +49,7 @@ export default function ExtraScreens({
   const [returnTime, setReturnTime] = useState("18:00");
   const [lead, setLead] = useState("30");
   const [mode, setMode] = useState("Carro");
+  const routeAlerts=useSavedRouteAlerts(savedRoutes,real && view==='saved');
   const [editId, setEditId] = useState(null);
   const [type, setType] = useState("Alagamento");
   const [severity, setSeverity] = useState("Moderada");
@@ -132,7 +135,7 @@ export default function ExtraScreens({
         outbound,
         returnTime,
         mode: real ? (previous?.mode ?? (realTravelMode==='walking'?'A pé':'Carro')) : mode,
-        ...(real ? {geometry:previous?.geometry ?? realRouteGeometry,lead,pushEnabled:previous?.pushEnabled ?? false} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
+        ...(real ? {geometry:previous?.geometry ?? realRouteGeometry,summary:previous?.summary ?? realRouteSummary,lead,pushEnabled:previous?.pushEnabled ?? false} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
     };
     if (real && (!route.origin?.coordinates || !route.destination?.coordinates)) {setError('Selecione origem e destino reais antes de salvar.');return;}
     if (setSavedRoutes(saveRoute(savedRoutes, route)) === false) return;
@@ -543,12 +546,22 @@ export default function ExtraScreens({
                 {real ? item.destination?.label : (item.destination || places[1])}
               </small>
               <br />
+              {real && <><small>{item.mode==='A pé'?'Andando':'Carro'} · {item.days} · ida {item.outbound} · volta {item.returnTime}</small><br/>
+                {Number.isFinite(item.summary?.distance) && Number.isFinite(item.summary?.duration) && <><small>Último trajeto salvo: {(item.summary.distance/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})} km · {Math.round(item.summary.duration/60)} min (estimativa da consulta).</small><br/></>}
+                <small>{routeAlerts[item.id]?.status==='loading'?'Consultando avisos do INMET…':routeAlerts[item.id]?.status==='error'?'Avisos do INMET indisponíveis.':routeAlerts[item.id]?.matches?.length?`${routeAlerts[item.id].matches.length} ${routeAlerts[item.id].matches.length===1?'aviso meteorológico vigente abrange':'avisos meteorológicos vigentes abrangem'} esta rota.`:routeAlerts[item.id]?.status==='unknown'?'Não foi possível relacionar os avisos a esta rota.':'Nenhum aviso vigente encontrado para esta rota entre os consultados.'}</small>
+                {routeAlerts[item.id]?.status==='unknown' && routeAlerts[item.id]?.matches?.length>0 && <small> Não foi possível verificar todos os avisos.</small>}
+                {routeAlerts[item.id]?.partial && <small> Consulta parcial.</small>}
+                {!item.geometry && <small> Consulte e salve novamente para associar avisos à rota.</small>}
+                <br/></>}
+              {!real && <>
               <small>
-                {item.days} · volta {item.returnTime}{!real && <> · {item.enabled ? "Alertas ativados" : "Alertas pausados"}</>}
+                {item.days} · volta {item.returnTime} · {item.enabled ? "Alertas ativados" : "Alertas pausados"}
               </small>
+              </>}
               <div className="card-actions">
                 <button onClick={() => beginEdit(item)}>Editar</button>
                 {real && <button onClick={()=>onUseRoute(item)}>Consultar novamente</button>}
+                {real && <button onClick={()=>go('alerts')}>Ver avisos</button>}
                 {real && <button disabled={pushNotifications?.status==='syncing'} onClick={async()=>{
                   if(!item.geometry){setError('Consulte e salve novamente esta rota para ativar alertas.');return;}
                   if(!item.pushEnabled && pushNotifications.status!=='active' && !await pushNotifications.activate())return;
@@ -588,7 +601,7 @@ export default function ExtraScreens({
         {real && pushNotifications?.status==='syncing' && <p role="status">Sincronizando alertas…</p>}
         {real && pushNotifications?.status==='active' && <p role="status">Notificações configuradas neste dispositivo. Avisos meteorológicos não confirmam alagamento na via.</p>}
         {real && pushNotifications?.registered && pushNotifications.status!=='syncing' && <button className="secondary" onClick={async()=>{if(await pushNotifications.disable())setSavedRoutes(savedRoutes.map(route=>({...route,pushEnabled:false})));}}>Desativar notificações neste dispositivo</button>}
-        <p className="footnote">{real ? 'Os alertas dependem da disponibilidade do INMET. No iPhone, adicione o aplicativo à Tela de Início para receber notificações.' : 'Alertas e horários são simulados; nenhuma notificação será enviada.'}</p>
+        <p className="footnote">{real ? 'Os avisos são meteorológicos para áreas que cruzam a rota, não confirmam alagamento na via. A cobertura do INMET não foi confirmada. Para notificações no iPhone, adicione o aplicativo à Tela de Início.' : 'Alertas e horários são simulados; nenhuma notificação será enviada.'}</p>
       </>
     );
   if (view === "profile")
