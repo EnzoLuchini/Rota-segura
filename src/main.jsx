@@ -6,7 +6,8 @@ import MapLayerControls from "./components/MapLayerControls";
 import RainLayer from "./components/RainLayer";
 import RealAlerts from "./components/RealAlerts";
 import MapResizeObserver from "./components/MapResizeObserver";
-import {Waterways, FitRoutes, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
+import {Waterways, HistoricalOccurrences, FloodAreas, RouteFloodHighlights} from "./components/RealLayers";
+import {RouteCamera} from "./components/RouteCamera";
 import {useRealRoutes, RealSearch, RealComparison} from "./components/RealRoutes";
 import Logo from "./components/Logo";
 import CityMapPanel from "./components/CityMapPanel";
@@ -118,11 +119,6 @@ function RecenterReal({signal, routes}) {
     else map.setView([-23.56,-46.65],13,{animate:false});
   },[signal,map]);
   return null;
-}
-function FollowPosition({position}) {
-  const map=useMap();
-  useEffect(()=>{if(position)map.setView([position.latitude,position.longitude],Math.max(map.getZoom?.() || 0,16),{animate:false});},[map,position]);
-  return position?<CircleMarker center={[position.latitude,position.longitude]} radius={9} pathOptions={{color:'white',weight:3,fillColor:'#1763e9',fillOpacity:1}}><Popup>Sua localização aproximada</Popup></CircleMarker>:null;
 }
 function LocateCityEvent({selection, markers}) {
   const map = useMap();
@@ -317,7 +313,7 @@ export default function App({real = false}) {
               <MapResizeObserver/>
               {!real && <Recenter signal={0} view={view} />}
               <MapLocation request={centerSignal} onStatus={setLocationStatus}/>
-              {real && view==='navigate' && <FollowPosition position={tracking.position}/>}
+              {real && <RouteCamera view={view} routes={realData.routes} selected={realData.selected} position={tracking.position}/>}
               <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
               {import.meta.env.DEV ? <>
                 <TileLayer
@@ -337,7 +333,7 @@ export default function App({real = false}) {
                 maxNativeZoom={20}
                 keepBuffer={2}
               />}
-              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} visible={true} onSnapshot={setCityHistory} routeEvents={view==='city'?[]:(realData.routes[realData.selected]?.floodContext?.history.events || [])}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realSegment && <Polyline positions={realSegment.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:'#ec9223',weight:10,dashArray:'8 6'}}/>}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}<FitRoutes routes={realData.routes}/></>}
+              {real && <><Waterways enabled={realData.water}/><HistoricalOccurrences enabled={realData.history} visible={true} onSnapshot={setCityHistory} routeEvents={view==='city'?[]:(realData.routes[realData.selected]?.floodContext?.history.events || [])}/>{realData.risk && realData.areas.length>0 && <GeoJSON key="areas" data={{type:"FeatureCollection",features:realData.areas}} style={{color:"#d88c18",weight:1,fillOpacity:.2}}/>}{realData.routes.map((route,i)=>({route,i})).sort((a,b)=>(a.i===realData.selected)-(b.i===realData.selected)).map(({route,i})=><Polyline key={i} positions={route.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:i===realData.selected?"#1763e9":"#7189a2",weight:i===realData.selected?6:4,opacity:.9}}/>)}{realSegment && <Polyline positions={realSegment.geometry.coordinates.map(([lon,lat])=>[lat,lon])} pathOptions={{color:'#ec9223',weight:10,dashArray:'8 6'}}/>}{realData.routes[realData.selected]?.geometry.coordinates.length>1 && [0,-1].map((index)=>{const point=realData.routes[realData.selected].geometry.coordinates.at(index);return <CircleMarker key={index} center={[point[1],point[0]]} radius={8} pathOptions={{color:"white",weight:3,fillColor:index===0?"#1763e9":"#0e2b64",fillOpacity:1}}><Popup>{index===0?"Origem":"Destino"}</Popup></CircleMarker>})}</>}
               {real && <><RainLayer enabled={realData.rain} onSnapshot={setCityRain}/><FloodAreas period={realData.floodPeriod}/>{view!=='city' && <RouteFloodHighlights route={realData.routes[realData.selected]} showMarkers={false}/>}</>}
               {!real && view !== "city" && <>
               <Polygon

@@ -44,12 +44,6 @@ export function Waterways({enabled}) {
   if (!enabled || !data?.features?.length) return null;
   return <GeoJSON key={JSON.stringify(data.features.map(f=>f.id))} data={data} style={f => ({color:'#1687b3',weight:3,opacity:0.8,dashArray:f.properties?.nm_tipo_curso_hidrografia?.toLowerCase().includes('subterrâneo')?'5 6':null})} onEachFeature={(feature,layer) => {const node=document.createElement('div');node.textContent=[feature.properties?.nm_descritivo || feature.properties?.nm_acidente || 'Trecho de drenagem',feature.properties?.nm_tipo_curso_hidrografia,'Fonte: GeoSampa / Prefeitura de São Paulo'].filter(Boolean).join(' · ');layer.bindPopup(node);}}/>;
 }
-export function FitRoutes({routes}) {
-  const map=useMap();
-  useEffect(() => {if(routes.length) {const points=routes.flatMap(r=>r.geometry.coordinates.map(([lon,lat])=>[lat,lon]));if(points.length) {map.invalidateSize({animate:false,pan:false});map.fitBounds(points,{padding:[35,35],animate:false});}}},[map,routes]);
-  return null;
-}
-
 export function HistoricalOccurrences({enabled,routeEvents=[],onSnapshot,visible=true}) {
   const [data,setData]=useState(null), [status,setStatus]=useState('');
   const [visibleBounds,setVisibleBounds]=useState(null), [sourceStates,setSourceStates]=useState({});
