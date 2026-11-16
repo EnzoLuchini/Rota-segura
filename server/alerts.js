@@ -53,9 +53,9 @@ function parseCap(document,id,city) {
     const start=time(text(info.onset || info.effective)),end=time(text(info.expires));
     if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start || !text(info.event) || !text(info.severity))throw Error('Vigência CAP inválida.');
     const areas=array(info.area);if(!areas.length)throw Error('Área CAP indisponível.');
-    let intersects=false;
-    for(const area of areas){const polygons=array(area.polygon);if(!polygons.length || area.circle)throw Error('Geometria CAP não suportada.');for(const item of polygons){if(booleanIntersects(city,shape(item)))intersects=true;}}
-    if(intersects)items.push({id:text(cap.identifier),event:text(info.event),severity:text(info.severity),headline:text(info.headline)||text(info.event),description:text(info.description),start:new Date(start).toISOString(),end:new Date(end).toISOString(),url:`https://avisos.inmet.gov.br/${id}`,source:'INMET'});
+    const polygons=[];
+    for(const area of areas){const entries=array(area.polygon);if(!entries.length || area.circle)throw Error('Geometria CAP não suportada.');for(const item of entries){const geometry=shape(item);if(booleanIntersects(city,geometry))polygons.push(geometry);}}
+    if(polygons.length)items.push({id:text(cap.identifier),event:text(info.event),severity:text(info.severity),headline:text(info.headline)||text(info.event),description:text(info.description),start:new Date(start).toISOString(),end:new Date(end).toISOString(),url:`https://avisos.inmet.gov.br/${id}`,source:'INMET',areas:polygons});
   }
   return {key,references,items};
 }

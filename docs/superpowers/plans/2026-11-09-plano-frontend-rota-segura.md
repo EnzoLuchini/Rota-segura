@@ -9,7 +9,7 @@ Atualizado em 15/11/2026 com base nos arquivos locais e nos registros anteriores
 - O mapa oferece drenagem, áreas de risco, registros históricos, mancha modelada de retorno de 5 anos e chuva observada. A mancha é contexto, não histórico dos últimos cinco anos ou previsão, e não altera a pontuação. A situação real da cidade mostra chuva, avisos INMET e link ao CGE; não há integração automática das ocorrências atuais do CGE.
 - A alternativa escolhida tem explicação e detalhes por trechos aproximados, com evidências e destaque no mapa. A pontuação é da rota inteira. A central real apresenta avisos meteorológicos, não confirmação de alagamento na via.
 - Rotas frequentes reais são armazenadas no navegador e podem ser editadas, excluídas e reutilizadas. Não há sincronização entre dispositivos, associação automática de avisos nem notificações reais. Relatos e preferências da simulação continuam fictícios e locais.
-- Cadastro, entrada e saída por e-mail e senha com Supabase Auth estão implementados localmente; visitantes continuam com acesso à consulta. A sessão não sincroniza as rotas frequentes. Não há recuperação de senha nessa implementação. A tela real de fontes e metodologia também está implementada localmente.
+- Cadastro, entrada, saída e recuperação de senha por e-mail com Supabase Auth estão implementados localmente; visitantes continuam com acesso à consulta. A sessão não sincroniza as rotas frequentes. A recuperação ainda precisa ser verificada com e-mail real. A tela real de fontes e metodologia também está implementada localmente.
 - O projeto possui API Node e configuração para Vercel. Em 12/11 foi registrada uma consulta bem-sucedida no domínio publicado e o commit `f929171` publicado. As alterações posteriores, incluindo cidade, trechos, autenticação e fontes, ainda não tiveram sua publicação e jornada verificadas no site público.
 
 ## Próximas etapas
@@ -42,7 +42,7 @@ Atualizado em 15/11/2026 com base nos arquivos locais e nos registros anteriores
 ### 5. Etapa final: autenticação e entrega
 
 - [ ] Configurar SMTP transacional para envio a usuários externos e verificar Site URL e Redirect URLs nos ambientes necessários. O usuário informou ter configurado os redirecionamentos, mas eles não foram verificados na consulta de leitura anterior.
-- [ ] Testar com uma conta real o ciclo de cadastro, recebimento e confirmação do e-mail, entrada, sessão e saída. Uma tentativa anterior não encontrou conta para o e-mail de teste, sem causa confirmada. Manter a confirmação de e-mail habilitada.
+- [ ] Testar com uma conta real o ciclo de cadastro, recebimento e confirmação do e-mail, entrada, sessão, saída e recuperação de senha. Uma tentativa anterior não encontrou conta para o e-mail de teste, sem causa confirmada. Manter a confirmação de e-mail habilitada.
 - [ ] Revisar documentação, variáveis públicas e limitações de conta e armazenamento; repetir as verificações relevantes antes da entrega.
 
 ## Evidências e limites das verificações anteriores

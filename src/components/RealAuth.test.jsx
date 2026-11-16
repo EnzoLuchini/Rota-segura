@@ -46,3 +46,32 @@ it('abre o perfil após entrada e permite sair da conta',async()=>{
  await user.click(screen.getByRole('button',{name:'Sair da conta'}));
  expect(signOut).toHaveBeenCalledOnce();
 });
+
+it('permite solicitar recuperação de senha com mensagem neutra',async()=>{
+ const user=userEvent.setup(), resetPassword=vi.fn().mockResolvedValue();
+ render(<RealAuth view="forgot" auth={{configured:true,resetPassword}} go={vi.fn()}/>);
+ await user.type(screen.getByLabelText('E-mail'),'pessoa@example.com');
+ await user.click(screen.getByRole('button',{name:'Enviar link'}));
+ expect(resetPassword).toHaveBeenCalledWith('pessoa@example.com');
+ expect(await screen.findByRole('status')).toHaveTextContent(/se existir uma conta/i);
+});
+
+it('permite definir uma nova senha após recuperar a conta',async()=>{
+ const user=userEvent.setup(), updatePassword=vi.fn().mockResolvedValue(),go=vi.fn();
+ render(<RealAuth view="reset" auth={{configured:true,updatePassword}} go={go}/>);
+ await user.type(screen.getByLabelText('Nova senha'),'nova-senha-segura');
+ await user.type(screen.getByLabelText('Confirme a nova senha'),'nova-senha-segura');
+ await user.click(screen.getByRole('button',{name:'Salvar nova senha'}));
+ expect(updatePassword).toHaveBeenCalledWith('nova-senha-segura');
+ expect(await screen.findByRole('status')).toHaveTextContent(/senha atualizada/i);
+});
+
+it('rejeita senhas diferentes sem atualizar a conta',async()=>{
+ const user=userEvent.setup(), updatePassword=vi.fn();
+ render(<RealAuth view="reset" auth={{configured:true,updatePassword}} go={vi.fn()}/>);
+ await user.type(screen.getByLabelText('Nova senha'),'primeira-senha');
+ await user.type(screen.getByLabelText('Confirme a nova senha'),'outra-senha');
+ await user.click(screen.getByRole('button',{name:'Salvar nova senha'}));
+ expect(await screen.findByRole('alert')).toHaveTextContent(/não coincidem/i);
+ expect(updatePassword).not.toHaveBeenCalled();
+});

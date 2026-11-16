@@ -21,6 +21,7 @@ test('retorna apenas avisos vigentes que intersectam o município',async()=>{
   assert.equal(data.status,'available');assert.equal(data.coverage,'unknown');
   assert.deepEqual(data.alerts.map(x=>x.id),['a']);
   assert.equal(data.alerts[0].event,'Tempestade');
+  assert.deepEqual(data.alerts[0].areas[0].geometry.coordinates[0][0],[-46.7,-23.6]);
   assert.match(data.alerts[0].url,/^https:\/\/avisos\.inmet\.gov\.br\/1$/);
 });
 

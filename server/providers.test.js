@@ -2,6 +2,13 @@ import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {floodAreasAlongRoute,drivingRoutes} from './providers.js';
 
+test('solicita ao provedor o perfil de caminhada',async()=>{
+  let requested;
+  const fake=mock.method(globalThis,'fetch',async url=>{requested=url;return {ok:true,json:async()=>({features:[]})};});
+  try {await drivingRoutes([-46.7,-23.5],[-46.69,-23.5],'test','walking');assert.match(requested,/\/foot-walking\/geojson$/);}
+  finally {fake.mock.restore();}
+});
+
 test('rejeita rotas do provedor sem geometria, duração ou distância válidas',async()=>{
   const valid={type:'Feature',geometry:{type:'LineString',coordinates:[[-46.7,-23.5],[-46.69,-23.5]]},properties:{summary:{distance:1000,duration:100}}};
   let features=[valid];

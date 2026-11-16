@@ -50,6 +50,7 @@ it('permite guardar a viagem real e reutilizar seus pontos depois de recarregar'
     await user.click(await screen.findByRole('button',{name:/salvar como rota frequente/i}));
     await user.click(screen.getByRole('button',{name:/salvar neste navegador/i}));
     expect(screen.getByText(/Origem escolhida.*Destino escolhido/)).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(REAL_SAVED_ROUTES_KEY))[0].geometry.coordinates).toEqual([[-46.7,-23.6],[-46.6,-23.5]]);
     view.unmount();render(<App real/>);
     await user.click(screen.getByRole('button',{name:'Minhas rotas'}));
     await user.click(screen.getByRole('button',{name:/consultar novamente/i}));

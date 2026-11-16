@@ -10,6 +10,9 @@ import { retainEditIdForView } from "./state/routeEditing";
 
 export default function ExtraScreens({
   real = false,
+  realRouteGeometry,
+  realTravelMode = 'driving',
+  pushNotifications,
   savedRoutesError = '',
   onUseRoute,
   view,
@@ -128,8 +131,8 @@ export default function ExtraScreens({
         days,
         outbound,
         returnTime,
-        mode,
-        ...(real ? {} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
+        mode: real ? (previous?.mode ?? (realTravelMode==='walking'?'A pé':'Carro')) : mode,
+        ...(real ? {geometry:previous?.geometry ?? realRouteGeometry,lead,pushEnabled:previous?.pushEnabled ?? false} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
     };
     if (real && (!route.origin?.coordinates || !route.destination?.coordinates)) {setError('Selecione origem e destino reais antes de salvar.');return;}
     if (setSavedRoutes(saveRoute(savedRoutes, route)) === false) return;
@@ -478,9 +481,9 @@ export default function ExtraScreens({
           {field("Nome da rota", name, setName)}
           <label className="form-field">
             Modal
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <select value={real ? (editId ? mode : realTravelMode==='walking'?'A pé':'Carro') : mode} disabled={real} onChange={(e) => setMode(e.target.value)}>
               <option>Carro</option>
-              {!real && <><option>A pé</option><option>Transporte público</option></>}
+              <option value="A pé">{real?'Andando':'A pé'}</option>{!real && <option>Transporte público</option>}
             </select>
           </label>
           <label className="form-field">
@@ -493,17 +496,18 @@ export default function ExtraScreens({
           </label>
           {field("Horário de ida", outbound, setOutbound, "time")}
           {field("Horário de volta", returnTime, setReturnTime, "time")}
-          {!real && <label className="form-field">
+          <label className="form-field">
             Antecedência
             <select value={lead} onChange={(e) => setLead(e.target.value)}>
               <option value="15">15 minutos</option>
               <option value="30">30 minutos</option>
               <option value="60">1 hora</option>
             </select>
-          </label>}
+          </label>
           <p className="footnote">
-            {real ? 'As rotas ficam neste navegador. Outras pessoas que o utilizem podem acessá-las. Não há envio de notificações.' : 'Avisos são apenas simulados. Não há envio de notificações.'}
+            {real ? 'A rota fica neste navegador. Ao ativar alertas, o trajeto e seus horários são enviados ao servidor para verificar avisos do INMET.' : 'Avisos são apenas simulados. Não há envio de notificações.'}
           </p>
+          {real && <p className="footnote">Para a volta, os avisos usam a geometria salva da ida; o trajeto de retorno pode ser diferente.</p>}
           {error && <p className="form-error">{error}</p>}
           {savedRoutesError && <p className="form-error" role="alert">{savedRoutesError}</p>}
           <button className="primary">Salvar neste navegador</button>
@@ -545,6 +549,11 @@ export default function ExtraScreens({
               <div className="card-actions">
                 <button onClick={() => beginEdit(item)}>Editar</button>
                 {real && <button onClick={()=>onUseRoute(item)}>Consultar novamente</button>}
+                {real && <button disabled={pushNotifications?.status==='syncing'} onClick={async()=>{
+                  if(!item.geometry){setError('Consulte e salve novamente esta rota para ativar alertas.');return;}
+                  if(!item.pushEnabled && pushNotifications.status!=='active' && !await pushNotifications.activate())return;
+                  setSavedRoutes(savedRoutes.map(route=>route.id===item.id?{...route,pushEnabled:!route.pushEnabled}:route));
+                }}>{item.pushEnabled?'Pausar alertas':'Ativar alertas'}</button>}
                 {!real && <button
                   onClick={() =>
                     setSavedRoutes(
@@ -573,7 +582,13 @@ export default function ExtraScreens({
           ))
         )}
         {savedRoutesError && <p className="form-error" role="alert">{savedRoutesError}</p>}
-        <p className="footnote">{real ? 'Dados guardados neste navegador; ao limpar seus dados, as rotas podem ser apagadas. Nenhuma notificação será enviada.' : 'Alertas e horários são simulados; nenhuma notificação será enviada.'}</p>
+        {real && error && <p className="form-error" role="alert">{error}</p>}
+        {real && pushNotifications?.message && <p className="form-error" role="alert">{pushNotifications.message}</p>}
+        {real && pushNotifications?.status==='error' && pushNotifications.registered && <button className="secondary" onClick={pushNotifications.retry}>Tentar sincronizar alertas</button>}
+        {real && pushNotifications?.status==='syncing' && <p role="status">Sincronizando alertas…</p>}
+        {real && pushNotifications?.status==='active' && <p role="status">Notificações configuradas neste dispositivo. Avisos meteorológicos não confirmam alagamento na via.</p>}
+        {real && pushNotifications?.registered && pushNotifications.status!=='syncing' && <button className="secondary" onClick={async()=>{if(await pushNotifications.disable())setSavedRoutes(savedRoutes.map(route=>({...route,pushEnabled:false})));}}>Desativar notificações neste dispositivo</button>}
+        <p className="footnote">{real ? 'Os alertas dependem da disponibilidade do INMET. No iPhone, adicione o aplicativo à Tela de Início para receber notificações.' : 'Alertas e horários são simulados; nenhuma notificação será enviada.'}</p>
       </>
     );
   if (view === "profile")

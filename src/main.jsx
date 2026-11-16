@@ -15,6 +15,7 @@ import RealRouteDetails from "./components/RealRouteDetails";
 import RealAuth from "./components/RealAuth";
 import RealSources from "./components/RealSources";
 import MapLocation from "./components/MapLocation";
+import {useRouteTracking} from "./state/useRouteTracking";
 import {useAuth} from "./state/useAuth";
 import {buildRouteSegments} from "./data/realRouteSegments";
 import ScenarioMarkers from "./components/ScenarioMarkers";
@@ -39,6 +40,7 @@ import {
 } from "./state/prototypeStorage";
 import { useStoredState } from "./state/useStoredState";
 import { useRealSavedRoutes } from "./state/useRealSavedRoutes";
+import { usePushNotifications } from "./state/usePushNotifications";
 import {
   MapContainer,
   TileLayer,
@@ -118,6 +120,11 @@ function RecenterReal({signal, routes}) {
   },[signal,map]);
   return null;
 }
+function FollowPosition({position}) {
+  const map=useMap();
+  useEffect(()=>{if(position)map.setView([position.latitude,position.longitude],Math.max(map.getZoom?.() || 0,16),{animate:false});},[map,position]);
+  return position?<CircleMarker center={[position.latitude,position.longitude]} radius={9} pathOptions={{color:'white',weight:3,fillColor:'#1763e9',fillOpacity:1}}><Popup>Sua localização aproximada</Popup></CircleMarker>:null;
+}
 function LocateCityEvent({selection, markers}) {
   const map = useMap();
   useEffect(() => {
@@ -128,7 +135,7 @@ function LocateCityEvent({selection, markers}) {
   return null;
 }
 export default function App({real = false}) {
-  const [view, setView] = useState(real ? "home" : (new URLSearchParams(window.location.search).get("view") || "welcome")),
+  const [view, setView] = useState(real ? (new URLSearchParams(window.location.search).has('alert') ? 'alerts' : 'home') : (new URLSearchParams(window.location.search).get("view") || "welcome")),
     [selected, setSelected] = useState("safe"),
     [expanded, setExpanded] = useState(-1),
     [menu, setMenu] = useState(false),
@@ -141,8 +148,12 @@ export default function App({real = false}) {
     [showAlert, setShowAlert] = useState(true),
     [citySelection, setCitySelection] = useState(null);
   const realData = useRealRoutes();
+  const tracking = useRouteTracking();
+  useEffect(()=>{if(view!=='navigate' && tracking.active)tracking.stop();},[view,tracking.active,tracking.stop]);
   const auth = useAuth(real);
+  useEffect(()=>{if(real && auth.recovering){setView('reset');setSheetOpen(true);}},[real,auth.recovering]);
   const [realSavedRoutes,setRealSavedRoutes,realSavedError] = useRealSavedRoutes();
+  const pushNotifications=usePushNotifications(realSavedRoutes,real);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [locationStatus,setLocationStatus] = useState('');
   const [cityRain,setCityRain]=useState({status:'loading',stations:[]});
@@ -176,7 +187,8 @@ export default function App({real = false}) {
     [selectedSegment, setSelectedSegment] = useState(0),
     [centerSignal, setCenterSignal] = useState(0);
   const go = (next) => {
-    if (real && !["home", "compare", "save", "saved", "alerts", "city", "segments", "profile", "login", "signup", "sources"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    if (real && !["home", "compare", "navigate", "save", "saved", "alerts", "city", "segments", "profile", "login", "signup", "forgot", "reset", "sources"].includes(next)) { window.location.href = `/simulacao?view=${encodeURIComponent(next)}`; return; }
+    if(next!=='navigate' && tracking.active)tracking.stop();
     setSheetOpen(true);
     setView(next);
     if (next !== 'city') setCitySelection(null);
@@ -306,6 +318,7 @@ export default function App({real = false}) {
               <MapResizeObserver/>
               {!real && <Recenter signal={0} view={view} />}
               <MapLocation request={centerSignal} onStatus={setLocationStatus}/>
+              {real && view==='navigate' && <FollowPosition position={tracking.position}/>}
               <LocateCityEvent selection={view === 'city' ? citySelection : null} markers={cityMarkers} />
               {import.meta.env.DEV ? <>
                 <TileLayer
@@ -451,10 +464,13 @@ export default function App({real = false}) {
             onTouchCancel={() => { sheetTouchStart.current = null; sheetDragged.current = false; }}
           ><span aria-hidden="true" /></button>
           <div className="panel-inner" id="panel-content">
-            {!(real && ['alerts','city','segments','profile','login','signup','sources'].includes(view)) && <ExtraScreens
+            {!(real && ['alerts','city','segments','profile','login','signup','forgot','reset','sources'].includes(view)) && <ExtraScreens
               real={real}
+              realRouteGeometry={realData.routes[realData.selected]?.geometry}
+              realTravelMode={realData.mode}
+              pushNotifications={pushNotifications}
               savedRoutesError={real ? realSavedError : ''}
-              onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);go('home');}}
+              onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);realData.setMode(item.mode==='A pé'?'walking':'driving');go('home');}}
               view={view}
               go={go}
               selected={selected}
@@ -481,9 +497,9 @@ export default function App({real = false}) {
               showAlert={showAlert}
               setShowAlert={setShowAlert}
             />}
-            {real && view === 'alerts' && <RealAlerts onBack={()=>go('home')}/>}
+            {real && view === 'alerts' && <RealAlerts initialAlert={new URLSearchParams(window.location.search).get('alert')} onBack={()=>go('home')}/>}
             {real && view === 'sources' && <RealSources onBack={()=>go('home')}/>}
-            {real && ['profile','login','signup'].includes(view) && <RealAuth view={view} auth={auth} go={go}/>}
+            {real && ['profile','login','signup','forgot','reset'].includes(view) && <RealAuth view={view} auth={auth} go={go}/>}
             {view === "city" && (real ? <RealCityPanel mode={cityMode} onModeChange={setCityMode} rain={cityRain} history={cityHistory} onLocate={locateCityEvent} onBack={()=>go('home')}/> : <CityMapPanel mode={cityMode} onModeChange={setCityMode} dataState={cityDataState} onDataStateChange={setCityDataState} reports={reports} onLocate={locateCityEvent} onBack={() => go("home")} />)}
             {real && view==='segments' && <RealRouteDetails route={realData.routes[realData.selected]} riskAreas={realData.areas} riskAvailable={realData.riskAvailable} selectedSegment={selectedSegment} setSelectedSegment={setSelectedSegment} onBack={()=>go('compare')}/>}
             {view === "home" && (
@@ -635,7 +651,8 @@ export default function App({real = false}) {
                 </div>
               </>
             )}
-            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")} onSave={()=>go("save")} onDetails={()=>go('segments')}/>}
+            {view === "compare" && real && <RealComparison data={realData} onBack={()=>go("home")} onSave={()=>go("save")} onDetails={()=>go('segments')} onStart={()=>{tracking.start();go('navigate');}}/>}
+            {view === "navigate" && real && <><h1>Acompanhando sua rota</h1><p className="intro">{realData.origin?.label} → {realData.destination?.label}</p><p>{realData.mode==='walking'?'Andando':'Carro'} · Trajeto {realData.selected+1}</p><p role="status">{tracking.error || (tracking.position ? 'Sua posição aparece em azul no mapa.' : 'Aguardando sua localização…')}</p><p className="footnote">Mantenha esta página aberta. A posição é aproximada e pode parar de atualizar em segundo plano. A rota não é recalculada automaticamente.</p><button className="secondary" onClick={()=>go('compare')}>Encerrar acompanhamento</button></>}
             {view === "compare" && !real && (
               <>
                 <button className="back" onClick={() => go("home")}>

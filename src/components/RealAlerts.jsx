@@ -4,8 +4,8 @@ import {ArrowLeft,ShieldAlert} from 'lucide-react';
 const date=value=>new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(new Date(value));
 const severity=value=>({Extreme:'Extrema',Severe:'Severa',Moderate:'Moderada',Minor:'Baixa',Unknown:'Não informada'})[value] || value;
 
-export default function RealAlerts({onBack}){
-  const [data,setData]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(null),[clock,setClock]=useState(Date.now()),[attempt,setAttempt]=useState(0);
+export default function RealAlerts({onBack,initialAlert=null}){
+  const [data,setData]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(initialAlert),[clock,setClock]=useState(Date.now()),[attempt,setAttempt]=useState(0);
   const heading=useRef(null), moveFocus=useRef(false);
   useLayoutEffect(()=>{
     if (!moveFocus.current) return;

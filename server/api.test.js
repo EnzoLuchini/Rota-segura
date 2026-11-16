@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import {createServer as createRealServer} from './api.js';
 const createServer=(options={})=>createRealServer({rain:async()=>{const now=Date.now();return {queriedAt:new Date(now).toISOString(),partial:false,stations:[{id:'test',name:'Teste',coordinates:[-46.695,-23.505],value:0,start:new Date(now-3600000).toISOString(),end:new Date(now-60000).toISOString()}]};},...options});
 
+test('encaminha o modo de caminhada e rejeita modos inválidos',async()=>{
+  const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+  let mode;
+  const server=createServer({key:'test',cityBoundary:async()=>city,drivingRoutes:async(_origin,_destination,_key,value)=>{mode=value;return [];}});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const request=mode=>fetch(`http://127.0.0.1:${server.address().port}/api/routes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:[-46.7,-23.5],destination:[-46.69,-23.5],mode})});
+    assert.equal((await request('walking')).status,200);assert.equal(mode,'walking');
+    assert.equal((await request('cycling')).status,400);
+  }finally{server.close();}
+});
+
 test('a central distingue avisos consultados de fonte indisponível',async()=>{
   for(const [alerts,status] of [[async()=>({status:'partial',coverage:'unknown',checkedAt:'2026-11-11T18:30:00Z',alerts:[]}),200],[async()=>{throw Error('offline');},502]]){
     const server=createServer({alerts});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

@@ -1,10 +1,11 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {ArrowLeft, ArrowRight, LocateFixed, MapPin, Search} from 'lucide-react';
+import {ArrowDownUp, ArrowLeft, ArrowRight, Car, Footprints, LocateFixed, MapPin, Search, X} from 'lucide-react';
 import {request} from './RealLayers';
 import FloodRouteContext from './FloodRouteContext';
 
 export function useRealRoutes() {
   const [origin,setOrigin] = useState(null), [destination,setDestination] = useState(null);
+  const [mode,setMode] = useState('driving');
   const [routes,setRoutes] = useState([]), [areas,setAreas] = useState([]), [selected,setSelected] = useState(0);
   const [riskAvailable,setRiskAvailable] = useState(false), [message,setMessage] = useState(''), [busy,setBusy] = useState(false);
   const [recommendationReason,setRecommendationReason]=useState(null), [sources,setSources]=useState(null);
@@ -18,11 +19,11 @@ export function useRealRoutes() {
   async function compare(onSuccess) {
     clear();setBusy(true);
     const id=requestSequence.current;
-    const key=JSON.stringify([origin.coordinates,destination.coordinates]);
+    const key=JSON.stringify([origin.coordinates,destination.coordinates,mode]);
     const cached=routeCache.current.get(key);
     try {
       const reused=!!cached && Date.now()<cached.expiresAt;
-      const data = reused ? cached.data : await request('/api/routes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:origin.coordinates,destination:destination.coordinates})});
+      const data = reused ? cached.data : await request('/api/routes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:origin.coordinates,destination:destination.coordinates,mode})});
       if(id!==requestSequence.current)return;
       if(!reused && data.routes.length && data.riskAvailable && data.sources?.rain?.status==='available' && data.routes.every(route=>route.rain?.status==='available' && Number.isFinite(Date.parse(route.rain.validUntil)) && route.floodContext?.history?.status==='available' && route.floodContext?.areas?.[5]?.status==='available')) {
         const now=Date.now(), expiresAt=Math.min(now+120000,...data.routes.map(route=>Date.parse(route.rain.validUntil)));
@@ -35,7 +36,7 @@ export function useRealRoutes() {
       if(data.routes.length) onSuccess();
     } catch(error) {if(id===requestSequence.current)setMessage(error.message);} finally {if(id===requestSequence.current)setBusy(false);}
   }
-  return {origin,destination,setOrigin,setDestination,routes,areas,selected,setSelected,riskAvailable,recommendationReason,sources,message,busy,water,setWater,rain,setRain,risk,setRisk,history,setHistory,floodPeriod,setFloodPeriod,clear,compare};
+  return {origin,destination,setOrigin,setDestination,mode,setMode,routes,areas,selected,setSelected,riskAvailable,recommendationReason,sources,message,busy,water,setWater,rain,setRain,risk,setRisk,history,setHistory,floodPeriod,setFloodPeriod,clear,compare};
 }
 
 function LocationInput({label,place,onChange}) {
@@ -60,6 +61,7 @@ function LocationInput({label,place,onChange}) {
 
 export function RealSearch({data,onCompare}) {
   const [locating,setLocating]=useState(false),[locationError,setLocationError]=useState('');
+  const [resetKey,setResetKey]=useState(0);
   const locationRequest=useRef(0);
   useEffect(()=>()=>{locationRequest.current++;},[]);
   const cancelLocation=()=>{locationRequest.current++;setLocating(false);setLocationError('');};
@@ -83,12 +85,16 @@ export function RealSearch({data,onCompare}) {
       setLocationError(error.code===1?'A permissão de localização foi negada. Informe um endereço ou altere a permissão do navegador.':error.code===3?'Não foi possível obter a localização a tempo. Tente novamente ou informe um endereço.':'Localização indisponível no momento. Tente novamente ou informe um endereço.');
     },{enableHighAccuracy:false,timeout:15000,maximumAge:0});
   }
-  return <><div className="search-box"><LocationInput label="Origem" place={data.origin} onChange={v=>{cancelLocation();data.setOrigin(v);data.clear();}}/>
+  return <><div className="search-box"><LocationInput key={`origin-${resetKey}`} label="Origem" place={data.origin} onChange={v=>{cancelLocation();data.setOrigin(v);data.clear();}}/>
     <div className="real-origin-location"><button className="real-location-button" type="button" onClick={locate} disabled={locating}><LocateFixed size={16}/>{locating?'Obtendo localização…':'Usar minha localização atual'}</button>
     <p className="real-location-note">Usada como origem e enviada ao provedor ao comparar rotas.</p>
     {locationError && <p className="real-input-error" role="status">{locationError}</p>}</div>
-    <div className="input-divider"/><LocationInput label="Destino" place={data.destination} onChange={v=>{data.setDestination(v);data.clear();}}/></div>
-    <button className="swap-trip" type="button" aria-label="Trocar origem e destino" onClick={()=>{cancelLocation();data.setOrigin(data.destination);data.setDestination(data.origin);data.clear();}}>⇅ Trocar origem e destino</button>
+    <div className="input-divider"/><LocationInput key={`destination-${resetKey}`} label="Destino" place={data.destination} onChange={v=>{data.setDestination(v);data.clear();}}/></div>
+    <div className="trip-actions">
+      <button className="swap-trip" type="button" onClick={()=>{cancelLocation();data.setOrigin(null);data.setDestination(null);data.clear();setResetKey(value=>value+1);}}><X size={16} aria-hidden="true"/>Limpar rotas</button>
+      <button className="swap-trip" type="button" onClick={()=>{cancelLocation();data.setOrigin(data.destination);data.setDestination(data.origin);data.clear();}}><ArrowDownUp size={16} aria-hidden="true"/>Trocar origem e destino</button>
+    </div>
+    <fieldset className="travel-mode"><legend>Como você vai?</legend><label><input type="radio" name="travel-mode" checked={data.mode==='driving'} onChange={()=>{data.clear();data.setMode('driving');}}/><Car size={18} aria-hidden="true"/> Carro</label><label><input type="radio" name="travel-mode" checked={data.mode==='walking'} onChange={()=>{data.clear();data.setMode('walking');}}/><Footprints size={18} aria-hidden="true"/> Andando</label></fieldset>
     {data.message && <div className="selection-warning" role="status">{data.message}</div>}
     <button className="primary" disabled={!data.origin || !data.destination || data.busy || locating} onClick={()=>data.compare(onCompare)}><Search size={18}/>{data.busy?'Consultando rotas…':'Comparar rotas'}</button>
   </>;
@@ -120,7 +126,7 @@ function incompleteSourceDetails(data) {
   return details;
 }
 
-export function RealComparison({data,onBack,onSave,onDetails}) {
+export function RealComparison({data,onBack,onSave,onDetails,onStart}) {
   const [clock,setClock]=useState(Date.now);
   const deadlines=data.routes.map(route=>Date.parse(route.rain?.readingsValidUntil)).filter(Number.isFinite);
   const deadline=deadlines.length?Math.min(...deadlines):null;
@@ -143,7 +149,8 @@ export function RealComparison({data,onBack,onSave,onDetails}) {
     {data.message && <div className="selection-warning" role="status">{data.message}</div>}
     {expired ? <div className="selection-warning" role="status">As medições de chuva venceram. Consulte as rotas novamente para atualizar a comparação.</div> : reasonText[data.recommendationReason] && <div className="selection-warning" role="status"><span>{reasonText[data.recommendationReason]}</span>{sourceDetails.length>0 && <ul>{sourceDetails.map(detail=><li key={detail}>{detail}</li>)}</ul>}</div>}
     {!data.riskAvailable && <div className="selection-warning" role="status">Dados de risco indisponíveis. Não é possível comparar a exposição.</div>}
-    <p className="comparison-hint">Selecione uma alternativa para destacá-la no mapa.</p>
+    <p className="comparison-hint">{data.mode==='walking'?'Andando':'Carro'} · Selecione uma alternativa para destacá-la no mapa.</p>
+    {onStart && <button className="primary" onClick={onStart}>Iniciar acompanhamento</button>}
     <div className="route-list real-route-list" role="group" aria-label="Escolha uma rota">{data.routes.map((route,i)=><button className={'route-card '+(data.selected===i?'selected':'')} key={i} onClick={()=>data.setSelected(i)} aria-pressed={data.selected===i}><span className="radio"/><span className="route-content"><span className="route-label">Trajeto {i+1} {data.selected===i && <span className="recommended">Selecionado</span>}</span><span className="route-stats"><strong>{Math.round((route.summary?.duration||0)/60)} min</strong><span>{((route.summary?.distance||0)/1000).toFixed(1)} km{route.summary?.duration===fastest?' · Mais rápida':''}</span></span>
       <small>{route.exposureMeters==null?'Áreas mapeadas indisponíveis':`${routeMeasurement(route.exposureMeters,item=>item.exposureMeters)} m do trajeto em áreas mapeadas`}</small>
       <small>{route.historyCount==null?'Histórico incompleto ou indisponível':`${route.historyCount} registros históricos a até 100 m`}</small>

@@ -7,6 +7,22 @@ import {RealSearch,useRealRoutes} from './RealRoutes';
 function Example(){const data=useRealRoutes();return <><RealSearch data={data} onCompare={()=>{}}/><output>{JSON.stringify(data.origin)}</output></>;}
 afterEach(()=>{vi.unstubAllGlobals();delete navigator.geolocation;});
 
+it('limpa os endereços digitados e ignora localização pendente',async()=>{
+  let reply;
+  Object.defineProperty(navigator,'geolocation',{configurable:true,value:{getCurrentPosition:success=>{reply=success;}}});
+  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+  const user=userEvent.setup();render(<Example/>);
+  await user.type(screen.getByLabelText('Origem'),'Rua A');
+  await user.type(screen.getByLabelText('Destino'),'Rua B');
+  await user.click(screen.getByRole('button',{name:/usar minha localização atual/i}));
+  await user.click(screen.getByRole('button',{name:/limpar rotas/i}));
+  expect(screen.getByLabelText('Origem')).toHaveValue('');
+  expect(screen.getByLabelText('Destino')).toHaveValue('');
+  expect(screen.getByRole('button',{name:/comparar rotas/i})).toBeDisabled();
+  reply({coords:{latitude:-23.55,longitude:-46.63}});
+  expect(fetch.mock.calls.some(([url])=>url==='/api/location')).toBe(false);
+});
+
 it('mostra a localização como alternativa dentro da seção de origem',()=>{
   render(<Example/>);
   const search=screen.getByLabelText('Origem').closest('.search-box');

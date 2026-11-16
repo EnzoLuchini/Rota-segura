@@ -6,6 +6,10 @@ import {analyzeFloodContext} from './floodContext.js';
 import {createRainProvider} from './rain.js';
 import {createAlertsProvider} from './alerts.js';
 import {distinctHistory, hasStableHistoryId, rainForRoute, scoreRoutes} from './routeScoring.js';
+import {createPushStore} from './pushStore.js';
+import {saveDevice,deleteDevice} from './pushService.js';
+import {deliverAlerts} from './pushWorker.js';
+import * as webpush from 'web-push';
 
 function send(res, status, data) {
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
@@ -14,16 +18,31 @@ function send(res, status, data) {
 function validCoordinate(value) {
   return Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) && value[0] >= -47 && value[0] <= -46 && value[1] >= -24.2 && value[1] <= -23.2;
 }
-async function body(req) {
+async function body(req,limit=4096) {
   let content = '';
-  for await (const chunk of req) { content += chunk; if (content.length > 4096) throw new Error('Pedido muito grande.'); }
+  for await (const chunk of req) { content += chunk; if (content.length > limit) throw new Error('Pedido muito grande.'); }
   return JSON.parse(content);
 }
 export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), alerts:loadAlerts, historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
   const alerts=loadAlerts || createAlertsProvider({cityBoundary:loadCity});
+  const pushStore=process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY ? createPushStore(process.env.SUPABASE_URL,process.env.SUPABASE_SECRET_KEY) : null;
   return http.createServer(async (req,res) => {
     const url = new URL(req.url,'http://localhost');
     try {
+      if(req.method==='GET' && url.pathname==='/api/push/config')return send(res,200,{available:Boolean(pushStore && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT && process.env.CRON_SECRET),publicKey:pushStore && process.env.VAPID_PUBLIC_KEY || null});
+      if(['POST','DELETE'].includes(req.method) && url.pathname==='/api/push/device'){
+        if(!pushStore || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY || !process.env.VAPID_SUBJECT || !process.env.CRON_SECRET)return send(res,503,{error:'Notificações indisponíveis.'});
+        let input;try{input=await body(req,500000);}catch{return send(res,400,{error:'Dados inválidos.'});}
+        const ok=req.method==='POST'?await saveDevice(pushStore,input):await deleteDevice(pushStore,input);
+        return send(res,ok?200:400,ok?{ok:true}:{error:'Não foi possível atualizar a inscrição.'});
+      }
+      if(req.method==='GET' && url.pathname==='/api/push/run'){
+        if(!pushStore || !process.env.CRON_SECRET || req.headers.authorization!==`Bearer ${process.env.CRON_SECRET}`)return send(res,403,{error:'Acesso negado.'});
+        if(!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY || !process.env.VAPID_SUBJECT)return send(res,503,{error:'Notificações indisponíveis.'});
+        webpush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
+        const result=await deliverAlerts({store:pushStore,alerts:await alerts(),send:(subscription,payload)=>webpush.sendNotification(subscription,JSON.stringify(payload),{TTL:900})});
+        return send(res,200,result);
+      }
       if (req.method==='GET' && url.pathname==='/api/alerts') return send(res,200,await alerts());
       if (req.method==='GET' && url.pathname==='/api/rain') {
         if (!rainEnabled) return send(res,503,{error:'Dados de chuva indisponíveis: integração experimental desativada.'});
@@ -55,10 +74,11 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
         if (!key) return send(res,503,{error:'Configure a chave HEIGIT_API_KEY para consultar rotas.'});
         let input;
         try { input = await body(req); } catch { return send(res,400,{error:'Pedido inválido.'}); }
+        if(input?.mode!==undefined && !['driving','walking'].includes(input.mode)) return send(res,400,{error:'Modo de deslocamento inválido.'});
         if (!validCoordinate(input?.origin) || !validCoordinate(input?.destination) || input.origin.join() === input.destination.join()) return send(res,400,{error:'Origem e destino inválidos.'});
         const city = await loadCity();
         if (![input.origin,input.destination].every(c => booleanPointInPolygon(point(c),city))) return send(res,400,{error:'Origem e destino devem estar no município de São Paulo.'});
-        const routes = await loadRoutes(input.origin,input.destination,key);
+        const routes = await loadRoutes(input.origin,input.destination,key,input.mode || 'driving');
         const valid = routes.filter(route => routeWithinCity(route,city));
         if (!valid.length) return send(res,200,{routes:[],recommendationReason:'no_routes',sources:{risk:{status:'not_queried'},history:{alagamento:'not_queried',inundacao:'not_queried'}},message:routes.length ? 'As rotas encontradas saem do município de São Paulo.' : 'Nenhuma rota foi encontrada.'});
         const coordinates=valid.flatMap(route=>route.geometry.coordinates), pad=0.0015;
