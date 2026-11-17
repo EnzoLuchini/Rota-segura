@@ -30,6 +30,13 @@ function renderMenu(props = {}) {
 }
 
 describe('MobileNavigation', () => {
+  it('oculta relatos no aplicativo real e mantém na simulação',()=>{
+    const {rerender}=render(<MobileNavigation open real onClose={vi.fn()} onNavigate={vi.fn()} triggerRef={createRef()}/>);
+    expect(screen.queryByRole('button',{name:/^(criar relato|relatos)$/i})).not.toBeInTheDocument();
+    rerender(<MobileNavigation open real={false} onClose={vi.fn()} onNavigate={vi.fn()} triggerRef={createRef()}/>);
+    expect(screen.getByRole('button',{name:'Criar relato'})).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Relatos'})).toBeInTheDocument();
+  });
   it('não renderiza a navegação quando está fechado', () => {
     render(<MobileNavigation open={false} onClose={vi.fn()} onNavigate={vi.fn()} alertCount={0} triggerRef={createRef()}/>);
     expect(screen.queryByRole('navigation', {name: 'Navegação móvel'})).not.toBeInTheDocument();

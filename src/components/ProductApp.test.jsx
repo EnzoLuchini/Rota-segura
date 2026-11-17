@@ -68,7 +68,8 @@ it('apresenta a consulta real no próprio fluxo visual do mock sem cenário fict
   expect(screen.getByRole('button',{name:/comparar rotas/i})).toBeDisabled();
   expect(screen.getByLabelText('Origem')).toHaveValue('');
   expect(screen.queryByText(/cenário disponível:/i)).not.toBeInTheDocument();
-  expect(screen.getByRole('link',{name:/abrir simulação/i})).toHaveAttribute('href','/simulacao');
+  expect(screen.queryByRole('link',{name:/abrir simulação/i})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/^(relatar|criar relato|ver relatos)$/i})).not.toBeInTheDocument();
 });
 
 it('usa a busca real na tela do mock e preserva a comparação e o retorno',async()=>{

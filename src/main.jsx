@@ -239,7 +239,6 @@ export default function App({real = false}) {
       {!real && <div className="simulation-banner">Simulação com dados fictícios · <a href="/">Ir para consulta real</a></div>}
       <header className="header">
         <Logo />
-        {real && <a className="real-simulation-link" href="/simulacao">Abrir simulação</a>}
         <nav aria-label="Navegação principal">
           <button
             className={"navlink " + (activeSection === "map" ? "active" : "")}
@@ -264,7 +263,7 @@ export default function App({real = false}) {
           >
             Minhas rotas
           </button>
-          <button
+          {!real && <button
             className={
               "navlink " + (activeSection === "report" ? "active" : "")
             }
@@ -272,7 +271,7 @@ export default function App({real = false}) {
             onClick={() => go("report")}
           >
             Relatar
-          </button>
+          </button>}
           <button
             className={
               "navlink " + (activeSection === "profile" ? "active" : "")
@@ -295,6 +294,7 @@ export default function App({real = false}) {
         </button>
       </header>
       <MobileNavigation
+        real={real}
         open={menu}
         onClose={() => setMenu(false)}
         onNavigate={go}
@@ -631,8 +631,8 @@ export default function App({real = false}) {
                   </div>
                 )}</>}
                 <div className="quick-actions">
-                  <button onClick={() => go("reports")}>Ver relatos</button>
-                  <button onClick={() => go("report")}>Criar relato</button>
+                  {!real && <><button onClick={() => go("reports")}>Ver relatos</button>
+                  <button onClick={() => go("report")}>Criar relato</button></>}
                   <button onClick={() => go("saved")}>Rotas frequentes</button>
                   <button onClick={() => go("sources")}>
                     Fontes e metodologia
@@ -642,7 +642,7 @@ export default function App({real = false}) {
                 <div className="notice">
                   <Info size={17} />
                   <span>
-                    {real ? "Relatos são simulados. As rotas, os avisos meteorológicos e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
+                    {real ? "As rotas, os avisos meteorológicos e os dados geográficos consultados são reais, com cobertura limitada." : "Este é um protótipo. Rotas, condições e ocorrências são ilustrativas."}
                   </span>
                 </div>
               </>

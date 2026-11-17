@@ -20,7 +20,7 @@ function focusMainHeading() {
   });
 }
 
-export default function MobileNavigation({open, onClose, onNavigate, alertCount, triggerRef}) {
+export default function MobileNavigation({open, onClose, onNavigate, alertCount, triggerRef, real = false}) {
   const firstActionRef = useRef(null);
   const onCloseRef = useRef(onClose);
 
@@ -53,7 +53,7 @@ export default function MobileNavigation({open, onClose, onNavigate, alertCount,
 
   return (
     <nav className="mobile-nav" id="mobile-navigation" aria-label="Navegação móvel">
-      {navigationItems.map(([target, label], index) => (
+      {navigationItems.filter(([target])=>!real || !['report','reports'].includes(target)).map(([target, label], index) => (
         <button
           key={target}
           ref={index === 0 ? firstActionRef : undefined}
