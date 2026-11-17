@@ -4,9 +4,19 @@ const geoBase = 'https://wfs.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/w
 const cityBase = 'https://geodados.daee.sp.gov.br/geoserver/sibh/wfs';
 const cache = new Map();
 async function json(url, options = {}) {
-  const response = await fetch(url, {...options, signal: AbortSignal.timeout(20000)});
-  if (!response.ok) throw new Error(`Serviço externo indisponível (${response.status}).`);
-  return response.json();
+  const {retryTransient=false,...requestOptions}=options;
+  for(let attempt=0;;attempt++){
+    let response;
+    try {response=await fetch(url, {...requestOptions, signal: AbortSignal.timeout(retryTransient ? 10000 : 20000)});}
+    catch(error){
+      if(!retryTransient || attempt>0 || !(error instanceof TypeError || error.name==='TimeoutError'))throw error;
+      await new Promise(resolve=>setTimeout(resolve,250));
+      continue;
+    }
+    if(response.ok)return response.json();
+    if(!retryTransient || attempt>0 || ![500,502,503,504].includes(response.status))throw new Error(`Serviço externo indisponível (${response.status}).`);
+    await new Promise(resolve=>setTimeout(resolve,250));
+  }
 }
 async function wfs(base, typeName, extra = {}) {
   const url = new URL(base);
@@ -77,13 +87,13 @@ export async function floodAreasAlongRoute(coordinates,period) {
 export async function findPlaces(query, city, key) {
   const url = new URL('https://api.heigit.org/pelias/v1/search');
   Object.entries({text:query,'boundary.rect.min_lon':'-46.85','boundary.rect.max_lon':'-46.35','boundary.rect.min_lat':'-24.05','boundary.rect.max_lat':'-23.35',size:'10'}).forEach(([k,v]) => url.searchParams.set(k,v));
-  const data = await json(url, {headers:{Authorization:key}});
+  const data = await json(url, {headers:{Authorization:key},retryTransient:true});
   if (!Array.isArray(data.features)) throw new Error('Resposta de busca inválida.');
   return data.features.filter(f => f.geometry?.type === 'Point' && booleanPointInPolygon(point(f.geometry.coordinates), city)).map(f => ({label:f.properties.label, coordinates:f.geometry.coordinates}));
 }
 export async function drivingRoutes(origin, destination, key, mode='driving') {
   const profile=mode==='walking'?'foot-walking':'driving-car';
-  const data = await json(`https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`, {method:'POST',headers:{Authorization:key,'Content-Type':'application/json'},body:JSON.stringify({coordinates:[origin,destination],alternative_routes:{target_count:3,weight_factor:1.6,share_factor:0.6}})});
+  const data = await json(`https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`, {method:'POST',headers:{Authorization:key,'Content-Type':'application/json'},body:JSON.stringify({coordinates:[origin,destination],alternative_routes:{target_count:3,weight_factor:1.6,share_factor:0.6}}),retryTransient:true});
   if (!Array.isArray(data.features) || data.features.some(f => {
     const coordinates=f?.geometry?.coordinates, summary=f?.properties?.summary;
     return f?.geometry?.type !== 'LineString' || !Array.isArray(coordinates) || coordinates.length<2 || coordinates.some(c=>!Array.isArray(c) || c.length!==2 || !c.every(Number.isFinite) || Math.abs(c[0])>180 || Math.abs(c[1])>90) || !Number.isFinite(summary?.distance) || summary.distance<0 || !Number.isFinite(summary?.duration) || summary.duration<0;

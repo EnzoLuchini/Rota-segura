@@ -23,7 +23,7 @@ async function body(req,limit=4096) {
   for await (const chunk of req) { content += chunk; if (content.length > limit) throw new Error('Pedido muito grande.'); }
   return JSON.parse(content);
 }
-export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), alerts:loadAlerts, historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
+export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnabled=process.env.SIBH_RAIN_EXPERIMENTAL!=='false', rain:loadRain=createRainProvider(), alerts:loadAlerts, historicalOccurrences: loadOccurrences = historicalOccurrences, floodAreas: loadFloodAreas = floodAreas, floodAreasAlongRoute:loadFloodAlong = floodAreasAlongRoute, cityBoundary:loadCity=cityBoundary, findPlaces:loadPlaces=findPlaces, riskAreas:loadRisk=riskAreas, drivingRoutes:loadRoutes=drivingRoutes} = {}) {
   const alerts=loadAlerts || createAlertsProvider({cityBoundary:loadCity});
   const pushStore=process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY ? createPushStore(process.env.SUPABASE_URL,process.env.SUPABASE_SECRET_KEY) : null;
   return http.createServer(async (req,res) => {
@@ -60,7 +60,15 @@ export function createServer({key = process.env.HEIGIT_API_KEY || '', rainEnable
         const query = (url.searchParams.get('q') || '').trim();
         if (query.length < 3 || query.length > 200) return send(res,400,{error:'Informe um endereço com pelo menos 3 caracteres.'});
         if (!key) return send(res,503,{error:'Configure a chave HEIGIT_API_KEY para pesquisar endereços.'});
-        return send(res,200,{places:await findPlaces(query,await cityBoundary(),key)});
+        let city;
+        try {city=await loadCity();} catch(error) {console.error('Busca de endereços: limite municipal indisponível.');throw error;}
+        let places;
+        try {places=await loadPlaces(query,city,key);} catch(error) {
+          const status=/^Serviço externo indisponível \((\d{3})\)\.$/.exec(error?.message || '')?.[1];
+          console.error(`Busca de endereços: HeiGIT indisponível${status ? ` (HTTP ${status})` : ''}.`);
+          throw error;
+        }
+        return send(res,200,{places});
       }
       if (req.method === 'POST' && url.pathname === '/api/location') {
         let input;

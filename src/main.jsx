@@ -506,7 +506,6 @@ export default function App({real = false}) {
                 <div className="eyebrow">
                   <span className="status-dot" /> Mobilidade mais informada
                 </div>
-                <h1>Um caminho melhor começa com informação.</h1>
                 <p className="intro">
                   Compare rotas e conheça os riscos relacionados à chuva no seu
                   trajeto.

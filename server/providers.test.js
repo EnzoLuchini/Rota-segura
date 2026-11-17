@@ -1,6 +1,6 @@
 import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
-import {floodAreasAlongRoute,drivingRoutes} from './providers.js';
+import {floodAreasAlongRoute,drivingRoutes,findPlaces} from './providers.js';
 
 test('solicita ao provedor o perfil de caminhada',async()=>{
   let requested;
@@ -38,4 +38,21 @@ test('consulta manchas pela geometria exata em lotes e preserva truncamento',asy
     assert.match(calls[0].searchParams.get('CQL_FILTER'),/^INTERSECTS\(ge_poligono,SRID=4326;LINESTRING\(/);
     assert.equal(data.truncated,false);
   } finally {fake.mock.restore();}
+});
+const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.9,-23.8],[-46.3,-23.8],[-46.3,-23.3],[-46.9,-23.3],[-46.9,-23.8]]]}};
+test('repete uma falha temporária da busca e retorna resultados válidos',async()=>{
+ let attempts=0;const fetchMock=mock.method(globalThis,'fetch',async()=>{attempts++;if(attempts===1)return new Response('{}',{status:500});return Response.json({features:[{geometry:{type:'Point',coordinates:[-46.65,-23.56]},properties:{label:'Avenida Paulista'}}]});});
+ try{const result=await findPlaces('Avenida Paulista',city,'teste');assert.equal(attempts,2);assert.equal(result[0].label,'Avenida Paulista');}finally{fetchMock.mock.restore();}
+});
+test('repete uma falha temporária ao calcular rotas',async()=>{
+ let attempts=0;const fetchMock=mock.method(globalThis,'fetch',async()=>{attempts++;if(attempts===1)return new Response('{}',{status:503});return Response.json({features:[{type:'Feature',geometry:{type:'LineString',coordinates:[[-46.65,-23.56],[-46.66,-23.57]]},properties:{summary:{distance:1000,duration:300}}}]});});
+ try{const result=await drivingRoutes([-46.65,-23.56],[-46.66,-23.57],'teste');assert.equal(attempts,2);assert.equal(result.length,1);}finally{fetchMock.mock.restore();}
+});
+test('não repete erro de autorização do provedor',async()=>{
+ let attempts=0;const fetchMock=mock.method(globalThis,'fetch',async()=>{attempts++;return new Response('{}',{status:403});});
+ try{await assert.rejects(findPlaces('Paulista',city,'teste'));assert.equal(attempts,1);}finally{fetchMock.mock.restore();}
+});
+test('repete uma falha de rede sem revelar a chave',async()=>{
+ let attempts=0;const fetchMock=mock.method(globalThis,'fetch',async()=>{attempts++;if(attempts===1)throw new TypeError('fetch failed');return Response.json({features:[]});});
+ try{assert.deepEqual(await findPlaces('Paulista',city,'teste'),[]);assert.equal(attempts,2);}finally{fetchMock.mock.restore();}
 });

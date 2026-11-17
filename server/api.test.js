@@ -236,3 +236,12 @@ test('não recomenda quando todas as fontes estão indisponíveis',async()=>{
     const data=await response.json();assert.equal(data.recommendationReason,'sources_incomplete');assert.deepEqual(data.sourcesUsed,[]);assert.ok(data.routes.every(route=>!route.recommended && route.score===null));
   }finally{server.close();}
 });
+
+test('busca endereços usando os provedores configurados e o limite municipal correto',async()=>{
+ const city={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-46.8,-23.7],[-46.5,-23.7],[-46.5,-23.4],[-46.8,-23.4],[-46.8,-23.7]]]}};
+ const expected=[{label:'Avenida Paulista',coordinates:[-46.65,-23.56]}];
+ const server=createServer({key:'test',cityBoundary:async()=>city,findPlaces:async(query,boundary,key)=>{assert.equal(query,'Paulista');assert.equal(boundary,city);assert.equal(key,'test');return expected;}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try {const response=await fetch(`http://127.0.0.1:${server.address().port}/api/places?q=Paulista`);assert.equal(response.status,200);assert.deepEqual((await response.json()).places,expected);}
+ finally{server.close();}
+});
