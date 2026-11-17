@@ -35,7 +35,7 @@ export default function RealAuth({view,auth,go}) {
     <span className="overline">Sua conta</span>
     <h1>{auth.loading?'Carregando conta…':auth.user?'Conta conectada':'Visitante'}</h1>
     {auth.user && <p>{auth.user.email}</p>}
-    <p className="intro">As rotas frequentes continuam salvas apenas neste navegador e não são sincronizadas com a conta.</p>
+    <p className="intro">{auth.user?'As rotas da sua conta ficam disponíveis quando você entrar em outros dispositivos.':'Como visitante, suas rotas ficam neste navegador e não são copiadas automaticamente para uma conta.'}</p>
     {!auth.configured && <p role="status">Acesso à conta indisponível no momento. Você pode continuar como visitante.</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {!auth.loading && auth.configured && (auth.user?<button className="secondary" disabled={busy} onClick={signOut}>Sair da conta</button>:<button className="primary" onClick={()=>go('login')}>Entrar ou criar conta</button>)}
@@ -52,7 +52,6 @@ export default function RealAuth({view,auth,go}) {
       {message && <p role="status">{message}</p>}
       <button className="primary" disabled={busy || (view==='reset' && !!message)}>{busy?'Aguarde…':view==='signup'?'Criar conta':view==='forgot'?'Enviar link':view==='reset'?'Salvar nova senha':'Entrar'}</button>
     </form>}
-    {view==='login' && <button className="secondary" onClick={()=>go('forgot')}>Esqueci minha senha</button>}
     <button className="secondary" onClick={()=>go(view==='signup'||view==='forgot'?'login':view==='reset'?'profile':'signup')}>{view==='signup'||view==='forgot'?'Já tenho conta':view==='reset'?'Ir para minha conta':'Criar conta'}</button>
   </>;
 }

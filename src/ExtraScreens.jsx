@@ -16,6 +16,7 @@ export default function ExtraScreens({
   realTravelMode = 'driving',
   pushNotifications,
   savedRoutesError = '',
+  savedRoutesState = {account:false,loading:false},
   onUseRoute,
   view,
   go,
@@ -119,7 +120,7 @@ export default function ExtraScreens({
       />
     </label>
   );
-  const persistRoute = (e) => {
+  const persistRoute = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       setError("Informe um nome para a rota.");
@@ -138,7 +139,7 @@ export default function ExtraScreens({
         ...(real ? {geometry:previous?.geometry ?? realRouteGeometry,summary:previous?.summary ?? realRouteSummary,lead,pushEnabled:previous?.pushEnabled ?? false} : {routeId:selected,lead,enabled:previous?.enabled ?? true}),
     };
     if (real && (!route.origin?.coordinates || !route.destination?.coordinates)) {setError('Selecione origem e destino reais antes de salvar.');return;}
-    if (setSavedRoutes(saveRoute(savedRoutes, route)) === false) return;
+    if (await setSavedRoutes(saveRoute(savedRoutes, route)) === false) return;
     setEditId(null);
     setError("");
     go("saved");
@@ -478,7 +479,7 @@ export default function ExtraScreens({
         {title(
           "Rota frequente",
           editId ? "Editar rota" : "Salvar rota",
-          real ? "A origem e o destino ficam neste navegador. A próxima consulta calcula novas alternativas." : "As escolhas ficam apenas neste navegador.",
+          real ? (savedRoutesState.account ? "A rota será salva na sua conta e poderá ser acessada em outros dispositivos." : "A origem e o destino ficam neste navegador. A próxima consulta calcula novas alternativas.") : "As escolhas ficam apenas neste navegador.",
         )}
         <form onSubmit={persistRoute}>
           {field("Nome da rota", name, setName)}
@@ -508,12 +509,12 @@ export default function ExtraScreens({
             </select>
           </label>
           <p className="footnote">
-            {real ? 'A rota fica neste navegador. Ao ativar alertas, o trajeto e seus horários são enviados ao servidor para verificar avisos do INMET.' : 'Avisos são apenas simulados. Não há envio de notificações.'}
+            {real ? 'Ao ativar alertas, o trajeto e seus horários são enviados ao servidor para verificar avisos do INMET.' : 'Avisos são apenas simulados. Não há envio de notificações.'}
           </p>
           {real && <p className="footnote">Para a volta, os avisos usam a geometria salva da ida; o trajeto de retorno pode ser diferente.</p>}
           {error && <p className="form-error">{error}</p>}
           {savedRoutesError && <p className="form-error" role="alert">{savedRoutesError}</p>}
-          <button className="primary">Salvar neste navegador</button>
+          <button className="primary" disabled={savedRoutesState.loading}>{savedRoutesState.account?'Salvar na conta':'Salvar neste navegador'}</button>
         </form>
       </>
     );
@@ -524,9 +525,10 @@ export default function ExtraScreens({
         {title(
           "Seus trajetos",
           "Rotas frequentes",
-          "Rotas guardadas neste navegador.",
+          real && savedRoutesState.account ? "Rotas salvas na sua conta." : "Rotas guardadas neste navegador.",
         )}{" "}
-        {savedRoutes.length === 0 && !savedRoutesError ? (
+        {savedRoutesState.loading && <p role="status">Carregando rotas…</p>}
+        {savedRoutes.length === 0 && !savedRoutesError && !savedRoutesState.loading ? (
           <div className="empty-state">
             Você ainda não salvou nenhuma rota.
             <button className="secondary" onClick={() => go("home")}>
@@ -581,7 +583,7 @@ export default function ExtraScreens({
                 <button
                   onClick={() => {
                     if (
-                      window.confirm("Excluir esta rota salva neste navegador?")
+                      window.confirm(savedRoutesState.account ? "Excluir esta rota da sua conta?" : "Excluir esta rota salva neste navegador?")
                     )
                       setSavedRoutes(
                         savedRoutes.filter((r) => r.id !== item.id),

@@ -17,7 +17,8 @@ import RealAuth from "./components/RealAuth";
 import RealSources from "./components/RealSources";
 import MapLocation from "./components/MapLocation";
 import {useRouteTracking} from "./state/useRouteTracking";
-import {useAuth} from "./state/useAuth";
+import {useAuth,client as supabaseClient} from "./state/useAuth";
+import {createSavedRouteStore} from './state/savedRouteStore';
 import {buildRouteSegments} from "./data/realRouteSegments";
 import ScenarioMarkers from "./components/ScenarioMarkers";
 import { getCityEvents, illustrativeFloodArea, illustrativeStreams } from "./data/cityMap";
@@ -77,6 +78,7 @@ import "./style.css";
 import "./real.css";
 
 const safer = routes.safe.points;
+const savedRouteStore=supabaseClient ? createSavedRouteStore(supabaseClient) : null;
 const faster = routes.fast.points;
 const cityMarkerIcons = {
   flood: divIcon({className: 'city-marker-shell', html: '<span class="city-marker city-marker-flood"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3C9 7 6.5 9.5 6.5 13a5.5 5.5 0 0 0 11 0C17.5 9.5 15 7 12 3Z"/><path d="M9.5 14.5c.3 1.1 1.2 1.8 2.5 1.9"/></svg></span>', iconSize: [36, 36], iconAnchor: [18, 18]}),
@@ -147,8 +149,8 @@ export default function App({real = false}) {
   useEffect(()=>{if(view!=='navigate' && tracking.active)tracking.stop();},[view,tracking.active,tracking.stop]);
   const auth = useAuth(real);
   useEffect(()=>{if(real && auth.recovering){setView('reset');setSheetOpen(true);}},[real,auth.recovering]);
-  const [realSavedRoutes,setRealSavedRoutes,realSavedError] = useRealSavedRoutes();
-  const pushNotifications=usePushNotifications(realSavedRoutes,real);
+  const [realSavedRoutes,setRealSavedRoutes,realSavedError,realSavedState] = useRealSavedRoutes({userId:real ? auth.user?.id : null,store:savedRouteStore,authLoading:real && auth.loading});
+  const pushNotifications=usePushNotifications(realSavedRoutes,real && !realSavedState.loading);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [locationStatus,setLocationStatus] = useState('');
   const mapView=['home','compare','navigate','city','segments'].includes(view);
@@ -466,6 +468,7 @@ export default function App({real = false}) {
               realTravelMode={realData.mode}
               pushNotifications={pushNotifications}
               savedRoutesError={real ? realSavedError : ''}
+              savedRoutesState={real ? realSavedState : undefined}
               onUseRoute={item => {realData.clear();realData.setOrigin(item.origin);realData.setDestination(item.destination);realData.setMode(item.mode==='A pé'?'walking':'driving');go('home');}}
               view={view}
               go={go}

@@ -62,3 +62,12 @@ it('mostra avisos vigentes compatíveis com a rota cadastrada',async()=>{
  expect(await within(card).findByText(/1 aviso meteorológico vigente abrange esta rota/i)).toBeInTheDocument();
  expect(within(card).getByText(/consulta parcial/i)).toBeInTheDocument();
 });
+
+it('mantém o formulário aberto quando a conta não consegue salvar no servidor',async()=>{
+ const user=userEvent.setup(),go=vi.fn(),save=vi.fn().mockResolvedValue(false);
+ render(<ExtraScreens view="save" go={go} real origin={origin} destination={destination} savedRoutes={[]} setSavedRoutes={save} savedRoutesState={{account:true,loading:false}}/>);
+ await user.click(screen.getByRole('button',{name:'Salvar na conta'}));
+ expect(save).toHaveBeenCalledOnce();
+ expect(go).not.toHaveBeenCalled();
+ expect(screen.getByRole('button',{name:'Salvar na conta'})).toBeInTheDocument();
+});
