@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {ArrowDownUp, ArrowLeft, ArrowRight, Car, Footprints, LocateFixed, MapPin, Search, X} from 'lucide-react';
+import {ArrowDownUp, ArrowLeft, ArrowRight, Car, Footprints, LoaderCircle, LocateFixed, MapPin, Search, X} from 'lucide-react';
 import {request} from './RealLayers';
 import FloodRouteContext from './FloodRouteContext';
 import {scoreRoutes} from '../data/scoreRoutes';
@@ -98,7 +98,7 @@ export function RealSearch({data,onCompare}) {
     </div>
     <fieldset className="travel-mode"><legend>Como você vai?</legend><label><input type="radio" name="travel-mode" checked={data.mode==='driving'} onChange={()=>{data.clear();data.setMode('driving');}}/><Car size={18} aria-hidden="true"/> Carro</label><label><input type="radio" name="travel-mode" checked={data.mode==='walking'} onChange={()=>{data.clear();data.setMode('walking');}}/><Footprints size={18} aria-hidden="true"/> Andando</label></fieldset>
     {data.message && <div className="selection-warning" role="status">{data.message}</div>}
-    <button className="primary" disabled={!data.origin || !data.destination || data.busy || locating} onClick={()=>data.compare(onCompare)}><Search size={18}/>{data.busy?'Consultando rotas…':'Comparar rotas'}</button>
+    <button className="primary route-search-button" aria-busy={data.busy} disabled={!data.origin || !data.destination || data.busy || locating} onClick={()=>data.compare(onCompare)}>{data.busy?<LoaderCircle className="route-search-spinner" size={18} aria-hidden="true"/>:<Search size={18} aria-hidden="true"/>}<span aria-live="polite">{data.busy?'Consultando rotas…':'Comparar rotas'}</span></button>
   </>;
 }
 
